@@ -166,7 +166,7 @@ tbody tr:hover{background:var(--soft)}
 details summary{cursor:pointer;color:var(--acc);font-weight:500;min-height:32px}
 tr.off td{text-decoration:line-through;opacity:.5}
 .rates{display:grid;gap:8px}
-.rate{display:grid;grid-template-columns:minmax(0,1fr) 5.5em 9em;gap:8px;align-items:center;padding:6px 0;border-top:1px solid var(--line)}
+.rate{display:grid;grid-template-columns:minmax(0,1fr) 4.5em 9em;gap:8px;align-items:center;padding:6px 0;border-top:1px solid var(--line)}
 .rate:first-child{border-top:0}
 .rate select,.rate input{min-height:40px;padding:6px 8px}
 .rate.crow{grid-template-columns:22px minmax(0,1fr) 8em}
