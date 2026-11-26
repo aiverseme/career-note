@@ -371,11 +371,13 @@ function renderMoney() {
 
 /* ---------- 9. 설정·데이터 화면 ---------- */
 function renderData() {
-  const p = Store.profile(), n = Store.count();
+  const p = Store.profile(), n = Store.count(), legacy = Store.legacy();
   const hasSample = ['events', 'careers', 'expenses', 'payments'].some(k => Store.list(k).some(x => x.sample));
   $('#v-data').innerHTML = `
   <div class="head"><div><h1>설정 · 데이터</h1><div class="sub">이력서 머리글과 데이터 보관</div></div></div>
-  ${Store.persistent ? '' : '<p class="note warn">이 화면에서는 브라우저 저장이 막혀 있어요. 입력한 내용이 창을 닫으면 사라질 수 있으니 아래 "내보내기"로 꼭 보관하세요.</p>'}
+  ${legacy ? `<p class="note">이 브라우저에 1단계 때 입력한 기록 ${legacy.n}건이 남아 있어요.
+    <button class="btn sm pri" data-act="legacy" style="margin-left:8px">내 계정으로 옮기기</button>
+    <button class="btn sm ghost" data-act="legacyNo">무시하기</button></p>` : ''}
   <div class="grid2">
     <form class="card" id="pform"><h2>이력서 머리글</h2>
       <div class="fields">
@@ -387,8 +389,12 @@ function renderData() {
       <div class="acts"><span class="sp"></span><button class="btn pri">저장</button></div>
     </form>
     <div class="stackv">
-      <div class="card"><h2>지금 저장된 데이터</h2>
-        <p class="note">지금은 <b>이 브라우저</b>에 저장돼요. 다음 단계에서 Supabase에 연결하면 휴대폰·학교 컴퓨터에서도 같은 데이터를 보게 됩니다.</p>
+      <div class="card"><h2>계정</h2>
+        <p style="margin:0 0 12px"><b>${esc(Store.user?.email)}</b> 으로 로그인 중</p>
+        <p class="note">데이터는 Supabase에 저장돼요. 휴대폰, 학교 컴퓨터 어디서든 같은 계정으로 로그인하면 똑같이 보여요.</p>
+        <div class="acts" style="margin-top:0"><button class="btn" data-act="reload">새로 불러오기</button><button class="btn ghost" data-act="logout">로그아웃</button></div>
+      </div>
+      <div class="card"><h2>저장된 데이터</h2>
         <div class="stats"><div class="stat"><b>${n.careers}</b><span>커리어</span></div><div class="stat"><b>${n.events}</b><span>일정</span></div><div class="stat"><b>${n.expenses + n.payments}</b><span>지출·정기결제</span></div></div>
       </div>
       <div class="card"><h2>백업 · 옮기기</h2>
@@ -415,8 +421,9 @@ function renderData() {
     try {
       const text = await f.text();
       const replace = await ask('기존 데이터를 지우고 이 파일로 바꿀까요? (취소하면 기존 데이터에 합칩니다)');
-      Store.importAll(text, replace ? 'replace' : 'merge'); toast('가져왔어요');
-    } catch (err) { toast('파일을 읽지 못했어요'); }
+      toast('가져오는 중…');
+      const n = await Store.importAll(text, replace ? 'replace' : 'merge'); toast(`${n}건을 가져왔어요`);
+    } catch (err) { console.error(err); toast('가져오지 못했어요. 파일을 확인해 주세요'); }
   };
 }
 
@@ -549,7 +556,20 @@ document.addEventListener('click', async e => {
   }
   if (act === 'sample') { loadSample(); toast('예시 데이터를 넣었어요'); }
   if (act === 'unsample') { if (await ask('예시 데이터만 지울까요? 직접 입력한 내용은 그대로 남아요.')) { Store.removeWhere(x => x.sample); toast('예시 데이터를 지웠어요'); } }
-  if (act === 'clear') { if (await ask('모든 일정·커리어·지출 기록을 지울까요? 먼저 내보내기로 백업해 두세요.')) { Store.clear(); toast('모두 지웠어요'); } }
+  if (act === 'clear') { if (await ask('모든 일정·커리어·지출 기록을 지울까요? 먼저 내보내기로 백업해 두세요.')) { await Store.clear(); toast('모두 지웠어요'); } }
+  if (act === 'reload') { await Store.reload(); toast('새로 불러왔어요'); }
+  if (act === 'logout') { if (await ask('로그아웃할까요?')) { await Store.signOut(); showAuth(); } }
+  if (act === 'legacyNo') { if (await ask('이 브라우저에 남은 1단계 기록을 지울까요? 계정 데이터에는 영향이 없어요.')) { Store.forgetLegacy(); render(); } }
+  if (act === 'legacy') {
+    const lg = Store.legacy(); if (!lg) return;
+    try {
+      const d = JSON.parse(lg.raw);
+      ['events', 'careers', 'expenses', 'payments'].forEach(k => { if (Array.isArray(d[k])) d[k] = d[k].filter(x => !x.sample); });
+      toast('옮기는 중…');
+      const n = await Store.importAll(JSON.stringify(d), 'merge');
+      Store.forgetLegacy(); render(); toast(`${n}건을 계정으로 옮겼어요`);
+    } catch (err) { console.error(err); toast('옮기지 못했어요. 잠시 뒤 다시 해 주세요'); }
+  }
 });
 
 /* ---------- 12. 예시 데이터 (둘러보기용, "예시 데이터만 지우기"로 한 번에 삭제) ---------- */
@@ -591,8 +611,40 @@ function loadSample() {
   ].forEach(o => S('expenses', o));
 }
 
-/* ---------- 13. 시작: 데이터가 바뀌면 다시 그리고, 주소(#)가 바뀌면 화면 전환 ---------- */
-Store.onChange(render);
-window.addEventListener('hashchange', route);
-route();
+/* ---------- 13. 로그인 화면 ---------- */
+function showAuth() {
+  document.body.classList.add('signed-out');
+  $('#app').hidden = true; $('#auth').hidden = false;
+  $('#authMsg').textContent = '';
+}
+function showApp() {
+  document.body.classList.remove('signed-out');
+  $('#auth').hidden = true; $('#app').hidden = false; $('#sync').hidden = false; $('#sync').className = 'sync'; $('#sync').textContent = '저장됨';
+  route();
+}
+const KO_ERR = m => /invalid login/i.test(m) ? '이메일 또는 비밀번호가 맞지 않아요.'
+  : /not confirmed/i.test(m) ? '메일함에서 가입 확인 링크를 먼저 눌러 주세요.'
+  : /already registered/i.test(m) ? '이미 가입된 이메일이에요. 로그인해 주세요.'
+  : /password/i.test(m) ? '비밀번호는 6자 이상으로 해 주세요.'
+  : /rate limit/i.test(m) ? '잠시 뒤에 다시 시도해 주세요.' : '문제가 생겼어요: ' + m;
+async function authDo(kind) {
+  const email = $('#authEmail').value.trim(), pw = $('#authPw').value, msg = $('#authMsg');
+  if (!email || pw.length < 6) { msg.className = 'auth-msg'; msg.textContent = '이메일과 6자 이상의 비밀번호를 입력해 주세요.'; return; }
+  msg.className = 'auth-msg ok'; msg.textContent = kind === 'in' ? '로그인 중…' : '가입 중…';
+  try {
+    if (kind === 'in') { await Store.signIn(email, pw); showApp(); }
+    else if (await Store.signUp(email, pw)) showApp();
+    else { msg.className = 'auth-msg ok'; msg.textContent = '가입 확인 메일을 보냈어요. 메일의 링크를 누른 뒤 여기서 로그인하세요.'; }
+  } catch (err) { msg.className = 'auth-msg'; msg.textContent = KO_ERR(err.message || ''); }
+}
+$('#authForm').onsubmit = e => { e.preventDefault(); authDo('in'); };
+$('#btnUp').onclick = () => authDo('up');
+
+/* ---------- 14. 시작: 로그인 확인 → 데이터 불러오기 → 화면 그리기 ---------- */
+Store.onChange(() => { if (!$('#app').hidden) render(); });
+Store.onError(toast);
+Store.onStatus(s => { const el = $('#sync'); el.className = 'sync ' + s; el.textContent = s === 'saving' ? '저장 중…' : '저장됨'; });
+window.addEventListener('hashchange', () => { if (!$('#app').hidden) route(); });
+document.body.classList.add('signed-out');
+Store.init().then(u => u ? showApp() : showAuth()).catch(err => { console.error(err); showAuth(); $('#authMsg').textContent = 'Supabase에 연결하지 못했어요. 인터넷 연결을 확인해 주세요.'; });
 }

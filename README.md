@@ -14,11 +14,17 @@
 |---|---|
 | `index.html` | 뼈대 — 메뉴와 빈 화면 칸 |
 | `css/style.css` | 디자인 — 맨 위 색 변수만 바꾸면 전체 색 변경 |
-| `js/store.js` | 데이터 창고 — 저장·불러오기 (다음 단계: Supabase로 교체) |
+| `js/config.js` | Supabase 주소와 공개 키 (공개돼도 안전한 값) |
+| `js/store.js` | 데이터 창고 — Supabase에 저장·불러오기, 로그인 |
 | `js/app.js` | 화면 그리기와 버튼 동작 |
 
 ## 진행 상황
 - [x] 1단계: 첫 버전 (브라우저 저장)
-- [ ] 2단계: GitHub Pages로 웹 주소 열기
-- [ ] 3단계: Supabase 연결 (로그인 + 어디서나 같은 데이터)
+- [x] 2단계: Supabase 연결 (로그인 + 어디서나 같은 데이터)
+- [ ] 3단계: GitHub Pages로 웹 주소 열기
 - [ ] 4단계: 데이터 자동 백업 (비공개 저장소)
+
+## Supabase 구조
+- `records` 표: 모든 기록 (`kind` = events / careers / expenses / payments, 내용은 `data`에 JSON으로)
+- `profiles` 표: 이력서 머리글
+- 보안 규칙(RLS): 로그인한 본인의 행만 읽기·쓰기 가능

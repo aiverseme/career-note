@@ -14,6 +14,7 @@
 :root[data-theme=light]{color-scheme:light}
 :root[data-theme=dark]{color-scheme:dark}
 *{box-sizing:border-box;min-width:0}
+[hidden]{display:none!important}
 html{scroll-padding-top:72px}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 "IBM Plex Sans KR",system-ui,sans-serif;overflow-x:clip;word-break:keep-all}
 h1,h2,h3{margin:0;line-height:1.2;text-wrap:balance}
@@ -188,6 +189,19 @@ dialog h2{font-size:21px;margin-bottom:16px}
   .stack td:empty{display:none}
 }
 @media (prefers-reduced-motion:reduce){#toast{transition:none}}
+
+/* ---------- 12. 로그인 화면과 저장 상태 표시 ---------- */
+.signed-out .nav,.signed-out .sync{display:none}
+.auth{min-height:calc(100dvh - 60px);display:grid;place-items:center;padding:32px 16px}
+.auth-card{width:min(420px,100%);display:grid;gap:14px;background:var(--panel);border:1px solid var(--line);border-top:4px solid var(--acc);border-radius:var(--radius);padding:clamp(24px,5vw,40px)}
+.auth-card h1{font-size:34px;font-weight:700;letter-spacing:-.02em}
+.auth-card p{margin:0}
+.auth-msg{min-height:1.5em;font-size:14px;color:var(--danger)}
+.auth-msg.ok{color:var(--acc)}
+.sync{font-size:13px;color:var(--mute);white-space:nowrap;padding-bottom:10px}
+.sync::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--acc);margin-right:6px;vertical-align:1px}
+.sync.saving::before{background:#d39a1c}
+@media (max-width:600px){.sync{position:absolute;right:16px;top:14px}}
 
 /* ---------- 11. 인쇄(이력서만 깔끔하게) ---------- */
 @media print{

@@ -1,79 +1,159 @@
 /* ============================================================
-   store.js — 데이터 저장 담당
+   store.js — 데이터 저장 담당 (Supabase 버전)
    ------------------------------------------------------------
-   지금은 이 브라우저(localStorage)에 저장합니다.
-   다음 단계에서 이 파일만 Supabase 버전으로 바꾸면
-   화면 코드(app.js)는 거의 그대로 쓸 수 있어요.
+   작동 방식
+   1) 로그인하면 내 데이터를 Supabase에서 한 번에 불러와 메모리에 둡니다.
+   2) 화면은 메모리의 데이터로 바로 그립니다 (빠름).
+   3) 저장·삭제하면 메모리를 먼저 바꾸고, 뒤에서 Supabase에 보냅니다.
+   4) 다른 기기에서 바꾼 내용은 이 창으로 돌아올 때 다시 불러옵니다.
 
-   저장하는 데이터 4종류 + 프로필
-   - events   : 일정 (수업·학습·업무·개인·성빈·오늘의 이슈)
-   - careers  : 커리어 기록 (강의, 프로젝트, 수상, 연수 등)
-   - expenses : 지출 (가계부)
-   - payments : 정기 결제 (학원비, 구독료 등 매월 나가는 돈)
-   - profile  : 이력서 머리글 (이름, 직함, 소개)
+   Supabase의 표
+   - records  : id, kind(종류), data(내용 전체), user_id(주인)
+                kind = events(일정) / careers(커리어) / expenses(지출) / payments(정기결제)
+   - profiles : 이력서 머리글(이름·직함·소개)
    ============================================================ */
 const Store = (() => {
-  const KEY = 'career-note-v1';
   const KINDS = ['events', 'careers', 'expenses', 'payments'];
+  const LEGACY_KEY = 'career-note-v1';             // 1단계(브라우저 저장) 때 쓰던 이름
+  const sb = supabase.createClient(CONFIG.url, CONFIG.key);
   const data = { events: [], careers: [], expenses: [], payments: [], profile: {} };
-  let persistent = true;          // 저장이 안 되는 환경이면 false
-  const listeners = [];
+  let user = null, lastLoad = 0, pending = 0;
+  const listeners = [], statusListeners = [], errorListeners = [];
 
-  // 1) 처음 열 때: 저장된 데이터 불러오기
-  try {
-    const raw = localStorage.getItem(KEY);
-    if (raw) load(JSON.parse(raw), 'replace');
-  } catch (e) { persistent = false; }
+  const notify = () => listeners.forEach(fn => fn());
+  const status = () => statusListeners.forEach(fn => fn(pending ? 'saving' : 'saved'));
+  const fail = msg => errorListeners.forEach(fn => fn(msg));
+  const newId = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
+  const valid = x => x && typeof x === 'object' && typeof x.id === 'string';
 
-  // 받은 데이터를 안전하게 옮겨 담기 (모양이 이상한 항목은 건너뜀)
-  function load(d, mode) {
-    if (!d || typeof d !== 'object') throw new Error('형식이 맞지 않아요');
-    KINDS.forEach(k => {
-      if (!Array.isArray(d[k])) return;
-      const items = d[k].filter(x => x && typeof x === 'object' && typeof x.id === 'string');
-      if (mode === 'replace') { data[k] = items; return; }
-      items.forEach(x => {                      // 합치기: 같은 id는 새 것으로 교체
-        const i = data[k].findIndex(y => y.id === x.id);
-        if (i >= 0) data[k][i] = x; else data[k].push(x);
-      });
-    });
-    if (d.profile && typeof d.profile === 'object') data.profile = { ...data.profile, ...d.profile };
+  // 뒤에서 Supabase에 보내는 일: 실패하면 알려 주고 다시 불러와 화면을 맞춥니다
+  async function send(job) {
+    pending++; status();
+    try { const { error } = await job(); if (error) throw error; }
+    catch (e) { console.error(e); fail('저장하지 못했어요. 인터넷 연결을 확인해 주세요.'); await load(); }
+    finally { pending--; status(); }
   }
 
-  // 2) 바뀔 때마다: 저장하고, 화면에 "다시 그려!" 알리기
-  function commit() {
-    try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) { persistent = false; }
-    listeners.forEach(fn => fn());
+  // 내 데이터 전부 불러오기
+  async function load() {
+    if (!user) return;
+    const [rec, prof] = await Promise.all([
+      sb.from('records').select('id, kind, data').limit(10000),
+      sb.from('profiles').select('data').maybeSingle()
+    ]);
+    if (rec.error) { fail('데이터를 불러오지 못했어요.'); return; }
+    KINDS.forEach(k => { data[k] = []; });
+    rec.data.forEach(r => { if (data[r.kind]) data[r.kind].push({ ...r.data, id: r.id }); });
+    data.profile = prof.data?.data || {};
+    lastLoad = Date.now();
+    notify();
   }
 
-  const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  // 여러 개를 한꺼번에 보내기 (가져오기용)
+  async function upsertMany(rows) {
+    for (let i = 0; i < rows.length; i += 200) {
+      const { error } = await sb.from('records').upsert(rows.slice(i, i + 200));
+      if (error) throw error;
+    }
+  }
 
-  // 3) 밖에서 쓰는 기능들
+  // 다른 기기에서 바꾼 내용 반영: 이 창으로 돌아오면 1분마다 한 번 새로 불러옴
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && user && !pending && Date.now() - lastLoad > 60000) load();
+  });
+
   return {
-    get persistent() { return persistent; },
+    /* ----- 로그인 ----- */
+    async init() {
+      const { data: s } = await sb.auth.getSession();
+      user = s.session?.user || null;
+      sb.auth.onAuthStateChange((_e, session) => { user = session?.user || null; });
+      if (user) await load();
+      return user;
+    },
+    get user() { return user; },
+    async signIn(email, password) {
+      const { data: d, error } = await sb.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      user = d.user; await load(); return user;
+    },
+    async signUp(email, password) {
+      const redirect = /^https?:/.test(location.protocol) ? location.origin + location.pathname : undefined;
+      const { data: d, error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: redirect } });
+      if (error) throw error;
+      if (d.session) { user = d.user; await load(); }
+      return !!d.session;                    // false면 메일 확인이 필요해요
+    },
+    async signOut() {
+      await sb.auth.signOut(); user = null;
+      KINDS.forEach(k => { data[k] = []; }); data.profile = {};
+    },
+    reload: load,
+
+    /* ----- 읽기 ----- */
     list: kind => data[kind],
     get: (kind, id) => data[kind].find(x => x.id === id),
+    profile: () => data.profile,
+    count: () => KINDS.reduce((o, k) => (o[k] = data[k].length, o), {}),
+
+    /* ----- 쓰기 ----- */
     save(kind, obj) {
-      const item = { ...obj };
+      const item = { ...obj, updated: Date.now() };
       if (!item.id) { item.id = newId(); item.created = Date.now(); data[kind].push(item); }
       else {
         const i = data[kind].findIndex(x => x.id === item.id);
         if (i >= 0) data[kind][i] = item; else data[kind].push(item);
       }
-      item.updated = Date.now();
-      commit();
+      notify();
+      const { id, ...body } = item;
+      send(() => sb.from('records').upsert({ id, kind, data: body, user_id: user.id }));
       return item;
     },
-    remove(kind, id) { data[kind] = data[kind].filter(x => x.id !== id); commit(); },
-    removeWhere(fn) { KINDS.forEach(k => { data[k] = data[k].filter(x => !fn(x)); }); commit(); },
-    profile: () => data.profile,
-    saveProfile(p) { data.profile = { ...p }; commit(); },
-    exportAll() {
-      return JSON.stringify({ app: 'career-note', version: 1, exported: new Date().toISOString(), ...data }, null, 2);
+    remove(kind, id) {
+      data[kind] = data[kind].filter(x => x.id !== id); notify();
+      send(() => sb.from('records').delete().eq('id', id));
     },
-    importAll(text, mode) { load(JSON.parse(text), mode); commit(); },
-    clear() { KINDS.forEach(k => { data[k] = []; }); commit(); },
-    count: () => KINDS.reduce((o, k) => (o[k] = data[k].length, o), {}),
-    onChange(fn) { listeners.push(fn); }
+    removeWhere(fn) {
+      const ids = KINDS.flatMap(k => data[k].filter(fn).map(x => x.id));
+      KINDS.forEach(k => { data[k] = data[k].filter(x => !fn(x)); }); notify();
+      if (ids.length) send(() => sb.from('records').delete().in('id', ids));
+    },
+    saveProfile(p) {
+      data.profile = { ...p }; notify();
+      send(() => sb.from('profiles').upsert({ user_id: user.id, data: data.profile }));
+    },
+    async clear() {
+      KINDS.forEach(k => { data[k] = []; }); notify();
+      await send(() => sb.from('records').delete().eq('user_id', user.id));
+    },
+
+    /* ----- 백업·옮기기 ----- */
+    exportAll() {
+      return JSON.stringify({ app: 'career-note', version: 2, exported: new Date().toISOString(), ...data }, null, 2);
+    },
+    async importAll(text, mode) {
+      const d = JSON.parse(text);
+      if (!d || typeof d !== 'object') throw new Error('형식이 맞지 않아요');
+      if (mode === 'replace') { const { error } = await sb.from('records').delete().eq('user_id', user.id); if (error) throw error; }
+      const rows = KINDS.flatMap(k => (Array.isArray(d[k]) ? d[k] : []).filter(valid)
+        .map(({ id, ...body }) => ({ id, kind: k, data: body, user_id: user.id })));
+      await upsertMany(rows);
+      if (d.profile && typeof d.profile === 'object' && Object.keys(d.profile).length && (mode === 'replace' || !Object.keys(data.profile).length))
+        await sb.from('profiles').upsert({ user_id: user.id, data: d.profile });
+      await load();
+      return rows.length;
+    },
+    // 1단계 때 이 브라우저에 저장해 둔 데이터가 있으면 그 내용을 돌려줌
+    legacy() {
+      try { const raw = localStorage.getItem(LEGACY_KEY); if (!raw) return null; const d = JSON.parse(raw);
+        const n = KINDS.reduce((s, k) => s + (Array.isArray(d[k]) ? d[k].filter(x => !x.sample).length : 0), 0);
+        return n ? { raw, n } : null; } catch (e) { return null; }
+    },
+    forgetLegacy() { try { localStorage.removeItem(LEGACY_KEY); } catch (e) {} },
+
+    /* ----- 알림 받기 ----- */
+    onChange(fn) { listeners.push(fn); },
+    onStatus(fn) { statusListeners.push(fn); },
+    onError(fn) { errorListeners.push(fn); }
   };
 })();
