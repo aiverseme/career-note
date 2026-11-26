@@ -167,7 +167,9 @@ details summary{cursor:pointer;color:var(--acc);font-weight:500;min-height:32px}
 tr.off td{text-decoration:line-through;opacity:.5}
 .rates{display:grid;gap:8px}
 .ybar{display:block;height:14px;background:var(--soft);border-radius:7px;overflow:hidden;min-width:60px}
-.ybar i{display:block;height:100%;background:var(--acc);border-radius:7px}
+.ybar{display:flex}
+.ybar i{display:block;height:100%;background:var(--acc)}
+.ybar i.o{background:color-mix(in srgb,var(--acc) 40%,transparent)}
 .ytable td:nth-child(3){width:40%}
 .ytot td{border-top:2px solid var(--ink);background:var(--soft)}
 .rate{display:grid;grid-template-columns:minmax(0,1fr) 4.5em 9em;gap:8px;align-items:center;padding:6px 0;border-top:1px solid var(--line)}

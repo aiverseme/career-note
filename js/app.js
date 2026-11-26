@@ -433,10 +433,10 @@ const progRates = () => Store.profile().progRates || {};
 // 수업 블록 1개의 수입: 수동 금액 > 사업·연도 금액 > 강사료표 > 기본 규칙
 function incomeOf(e) {
   const g = groupOf(e), pk = e.program ? `${e.program}|${(e.date || '').slice(0, 4)}` : '';
-  const r = pk && progRates()[pk] ? { amount: progRates()[pk], rule: `${e.program} ${pk.slice(-4)}년` } : rates()[g]?.amount ? rates()[g] : (defaultRate(g) || {});
+  const r = pk && progRates()[pk] ? { amount: progRates()[pk], rule: `${e.program} ${pk.slice(-4)}년` } : (rates()[g]?.amount ?? '') !== '' ? rates()[g] : (defaultRate(g) || {});
   const periods = e.periods !== '' && e.periods != null ? Number(e.periods) : 2;   // 수업 1회 = 기본 2차시
   const off = isOff({ title: e.title, status: e.status });
-  const auto = !r.amount ? null : Number(r.amount);   // 블록 1개 = 강사료 1회 (시간과 무관)
+  const auto = r.amount == null || r.amount === '' ? null : Number(r.amount);   // 블록 1개 = 강사료 1회 (시간과 무관)
   const manual = e.pay !== '' && e.pay != null;
   return { g, periods, off, manual, rule: r.rule, noRate: !manual && auto == null, amount: off ? 0 : manual ? Number(e.pay) : (auto || 0), autoAmount: auto };
 }
@@ -446,28 +446,35 @@ function monthIncome(mon) {
   const total = live.reduce((s, r) => s + r.amount, 0);
   const groups = {};
   live.forEach(r => { const g = groups[r.g] ||= { n: 0, periods: 0, amount: 0, noRate: 0 }; g.n++; g.periods += r.periods; g.amount += r.amount; if (r.noRate) g.noRate++; });
-  return { rows, live, total, groups, noRate: live.filter(r => r.noRate).length };
+  const other = Store.list('incomes').filter(x => (x.date || '').startsWith(mon)).sort((a, b) => a.date.localeCompare(b.date));
+  const otherTotal = other.reduce((s, x) => s + (Number(x.amount) || 0), 0);
+  const otherNet = other.reduce((s, x) => s + netOf(x), 0);
+  return { rows, live, total, groups, noRate: live.filter(r => r.noRate).length, other, otherTotal, otherNet };
 }
+// 수업 외 수입의 공제 후 금액 (8.8% 등)
+const netOf = x => Math.round((Number(x.amount) || 0) * (1 - (Number(x.tax) || 0) / 100));
 const net33 = n => Math.round(n * 0.967);
 function yearSummary(y) {
   return [...Array(12)].map((_, i) => {
     const mon = `${y}-${pad(i + 1)}`, inc = monthIncome(mon);
     const spend = Store.list('expenses').filter(x => (x.date || '').startsWith(mon)).reduce((s, x) => s + (Number(x.amount) || 0), 0);
-    return { m: i + 1, mon, n: inc.live.length, income: inc.total, noRate: inc.noRate, spend };
+    return { m: i + 1, mon, n: inc.live.length, income: inc.total, other: inc.otherTotal, otherNet: inc.otherNet, all: inc.total + inc.otherTotal, noRate: inc.noRate, spend };
   });
 }
 
 const mviewSeg = () => `<div class="seg" role="group" aria-label="보기">${[['month', '월별'], ['year', '연간 · 연봉']].map(([k, n]) => `<button data-act="mview" data-v="${k}" aria-pressed="${(state.mview || 'month') === k}">${n}</button>`).join('')}</div>`;
 function renderYear() {
   const y = state.mY, tax = !!Store.profile().tax33, rows = yearSummary(y);
-  const tot = rows.reduce((a, r) => ({ n: a.n + r.n, income: a.income + r.income, spend: a.spend + r.spend, noRate: a.noRate + r.noRate }), { n: 0, income: 0, spend: 0, noRate: 0 });
-  const max = Math.max(1, ...rows.map(r => r.income));
+  const tot = rows.reduce((a, r) => ({ n: a.n + r.n, income: a.income + r.income, other: a.other + r.other, otherNet: a.otherNet + r.otherNet, all: a.all + r.all, spend: a.spend + r.spend, noRate: a.noRate + r.noRate }), { n: 0, income: 0, other: 0, otherNet: 0, all: 0, spend: 0, noRate: 0 });
+  const max = Math.max(1, ...rows.map(r => r.all));
+  const netAll = r => (tax ? net33(r.income) : r.income) + r.otherNet;
   const years = uniq(Store.list('events').filter(e => e.cat === 'class').map(e => (e.date || '').slice(0, 4))).filter(Boolean).sort();
-  const yearTotals = years.map(yy => ({ y: yy, ...yearSummary(+yy).reduce((a, r) => ({ n: a.n + r.n, income: a.income + r.income }), { n: 0, income: 0 }) }));
-  const best = rows.reduce((b, r) => r.income > b.income ? r : b, rows[0]);
-  const activeMonths = rows.filter(r => r.income > 0).length || 1;
+  Store.list('incomes').forEach(x => { const yy = (x.date || '').slice(0, 4); if (yy && !years.includes(yy)) years.push(yy); }); years.sort();
+  const yearTotals = years.map(yy => ({ y: yy, ...yearSummary(+yy).reduce((a, r) => ({ n: a.n + r.n, income: a.income + r.income, other: a.other + r.other, all: a.all + r.all }), { n: 0, income: 0, other: 0, all: 0 }) }));
+  const best = rows.reduce((b, r) => r.all > b.all ? r : b, rows[0]);
+  const activeMonths = rows.filter(r => r.all > 0).length || 1;
   $('#v-money').innerHTML = `
-  <div class="head"><div><h1>수입 · 지출</h1><div class="sub">${y}년 월별 강의 수입과 연봉</div></div></div>
+  <div class="head"><div><h1>수입 · 지출</h1><div class="sub">${y}년 월별 수입과 연봉</div></div></div>
   <div class="calbar"><h2>${y}년</h2>
     <button class="btn sm" data-act="ynav" data-d="-1" aria-label="이전 해">‹</button>
     <button class="btn sm" data-act="ynav" data-d="0">올해</button>
@@ -475,22 +482,23 @@ function renderYear() {
     <span style="flex:1"></span>${mviewSeg()}</div>
   <div class="card income">
     <div class="stats">
-      <div class="stat"><b class="num">${tot.income.toLocaleString('ko-KR')}</b><span>${y}년 연봉 · 강의 수입(원)</span></div>
-      ${tax ? `<div class="stat"><b class="num">${net33(tot.income).toLocaleString('ko-KR')}</b><span>3.3% 공제 후(원)</span></div>` : ''}
-      <div class="stat"><b class="num">${Math.round(tot.income / activeMonths).toLocaleString('ko-KR')}</b><span>월평균 (수업 있는 ${activeMonths}개월)</span></div>
+      <div class="stat"><b class="num">${tot.all.toLocaleString('ko-KR')}</b><span>${y}년 연봉 · 총수입(원)</span></div>
+      <div class="stat"><b class="num">${netAll(tot).toLocaleString('ko-KR')}</b><span>공제 후 실수령(원)</span></div>
+      <div class="stat"><b class="num">${tot.income.toLocaleString('ko-KR')}</b><span>강의 수입 · 기타 ${tot.other.toLocaleString('ko-KR')}</span></div>
+      <div class="stat"><b class="num">${Math.round(tot.all / activeMonths).toLocaleString('ko-KR')}</b><span>월평균 (수입 있는 ${activeMonths}개월)</span></div>
       <div class="stat"><b class="num">${tot.n.toLocaleString('ko-KR')}</b><span>수업 횟수 · ${(tot.n * 2).toLocaleString('ko-KR')}차시</span></div>
     </div>
     ${tot.noRate ? `<p class="note warn" style="margin:14px 0 0">강사료가 정해지지 않은 수업이 ${tot.noRate}회 있어서 연봉에 빠져 있어요. <a href="#data">설정 → 수업별 강사료표</a>에서 입력하세요.</p>` : ''}
-    <h2 style="margin-top:18px">월별 강의 수입 ${best.income ? `<span class="n">최고 ${best.m}월 ${won(best.income)}</span>` : ''}</h2>
-    <table class="stack ytable"><thead><tr><th>월</th><th class="r">수업</th><th>강의 수입</th><th class="r">금액</th>${tax ? '<th class="r">공제 후</th>' : ''}<th class="r">지출</th></tr></thead><tbody>
+    <h2 style="margin-top:18px">월별 수입 ${best.all ? `<span class="n">최고 ${best.m}월 ${won(best.all)}</span>` : ''}</h2>
+    <table class="stack ytable"><thead><tr><th>월</th><th class="r">수업</th><th>총수입</th><th class="r">강의</th><th class="r">기타</th><th class="r">합계</th><th class="r">실수령</th><th class="r">지출</th></tr></thead><tbody>
     ${rows.map(r => `<tr data-act="gomonth" data-y="${y}" data-m="${r.m - 1}"><td><b>${r.m}월</b>${r.noRate ? ' <span class="tag" style="--c:#c8371e">미입력 ' + r.noRate + '</span>' : ''}</td><td class="r num">${r.n}회</td>
-      <td><span class="ybar"><i style="width:${r.income / max * 100}%"></i></span></td><td class="r num">${won(r.income)}</td>${tax ? `<td class="r num">${won(net33(r.income))}</td>` : ''}<td class="r num">${r.spend ? won(r.spend) : '-'}</td></tr>`).join('')}
-    <tr class="ytot"><td><b>합계</b></td><td class="r num">${tot.n}회</td><td></td><td class="r num"><b>${won(tot.income)}</b></td>${tax ? `<td class="r num"><b>${won(net33(tot.income))}</b></td>` : ''}<td class="r num">${won(tot.spend)}</td></tr>
+      <td><span class="ybar"><i style="width:${r.income / max * 100}%"></i><i class="o" style="width:${r.other / max * 100}%"></i></span></td><td class="r num">${won(r.income)}</td><td class="r num">${r.other ? won(r.other) : '-'}</td><td class="r num"><b>${won(r.all)}</b></td><td class="r num">${won(netAll(r))}</td><td class="r num">${r.spend ? won(r.spend) : '-'}</td></tr>`).join('')}
+    <tr class="ytot"><td><b>합계</b></td><td class="r num">${tot.n}회</td><td></td><td class="r num">${won(tot.income)}</td><td class="r num">${won(tot.other)}</td><td class="r num"><b>${won(tot.all)}</b></td><td class="r num"><b>${won(netAll(tot))}</b></td><td class="r num">${won(tot.spend)}</td></tr>
     </tbody></table>
-    <p class="mute" style="font-size:14px;margin:8px 0 0">월을 누르면 그 달의 기관별 내역으로 이동해요.</p>
+    <p class="mute" style="font-size:14px;margin:8px 0 0">막대: 진한 색 강의 수입, 연한 색 기타 수입(사업비·상금 등). 실수령은 ${tax ? '강의 3.3% 공제, ' : ''}기타 수입의 공제율을 반영한 금액이에요. 월을 누르면 그 달 상세로 이동해요.</p>
   </div>
-  ${yearTotals.length > 1 ? `<div class="card"><h2>연도별 연봉</h2><table class="stack"><thead><tr><th>연도</th><th class="r">수업</th><th class="r">강의 수입</th>${tax ? '<th class="r">공제 후</th>' : ''}</tr></thead><tbody>
-    ${yearTotals.map(t => `<tr data-act="goyear" data-y="${t.y}"><td><b>${t.y}년</b>${+t.y === y ? ' <span class="tag">보는 중</span>' : ''}</td><td class="r num">${t.n}회</td><td class="r num">${won(t.income)}</td>${tax ? `<td class="r num">${won(net33(t.income))}</td>` : ''}</tr>`).join('')}
+  ${yearTotals.length > 1 ? `<div class="card"><h2>연도별 연봉</h2><table class="stack"><thead><tr><th>연도</th><th class="r">수업</th><th class="r">강의 수입</th><th class="r">기타 수입</th><th class="r">연봉(총수입)</th></tr></thead><tbody>
+    ${yearTotals.map(t => `<tr data-act="goyear" data-y="${t.y}"><td><b>${t.y}년</b>${+t.y === y ? ' <span class="tag">보는 중</span>' : ''}</td><td class="r num">${t.n}회</td><td class="r num">${won(t.income)}</td><td class="r num">${t.other ? won(t.other) : '-'}</td><td class="r num"><b>${won(t.all)}</b></td></tr>`).join('')}
     </tbody></table></div>` : ''}`;
 }
 
@@ -512,6 +520,7 @@ function renderMoney() {
   $('#v-money').innerHTML = `
   <div class="head"><div><h1>수입 · 지출</h1><div class="sub">수업 블록마다 강사료를 계산한 강의 수입과 지출 기록</div></div>
     <div class="tools"><button class="btn pri" data-act="add" data-kind="expenses">+ 지출 입력</button>
+    <button class="btn" data-act="add" data-kind="incomes">+ 수업 외 수입</button>
     <button class="btn" data-act="add" data-kind="payments">+ 정기 결제 등록</button></div></div>
   <div class="calbar"><h2>${y}년 ${m + 1}월</h2>
     <button class="btn sm" data-act="mmonth" data-d="-1" aria-label="이전 달">‹</button>
@@ -520,13 +529,16 @@ function renderMoney() {
     <span style="flex:1"></span>${mviewSeg()}</div>
   <div class="card income">
     <div class="stats">
-      <div class="stat"><b class="num">${inc.total.toLocaleString('ko-KR')}</b><span>강의 수입(원) · ${inc.live.length}회</span></div>
-      ${tax ? `<div class="stat"><b class="num">${net33(inc.total).toLocaleString('ko-KR')}</b><span>3.3% 공제 후(원)</span></div>` : ''}
+      <div class="stat"><b class="num">${(inc.total + inc.otherTotal).toLocaleString('ko-KR')}</b><span>총수입(원) · 강의 ${inc.live.length}회${inc.otherTotal ? ' + 기타' : ''}</span></div>
+      <div class="stat"><b class="num">${((tax ? net33(inc.total) : inc.total) + inc.otherNet).toLocaleString('ko-KR')}</b><span>공제 후 실수령(원)</span></div>
       <div class="stat"><b class="num">${total.toLocaleString('ko-KR')}</b><span>지출(원)</span></div>
-      <div class="stat"><b class="num ${(tax ? net33(inc.total) : inc.total) - total < 0 ? 'neg' : ''}">${((tax ? net33(inc.total) : inc.total) - total).toLocaleString('ko-KR')}</b><span>수입 − 지출(원)</span></div>
+      <div class="stat"><b class="num ${(tax ? net33(inc.total) : inc.total) + inc.otherNet - total < 0 ? 'neg' : ''}">${((tax ? net33(inc.total) : inc.total) + inc.otherNet - total).toLocaleString('ko-KR')}</b><span>실수령 − 지출(원)</span></div>
     </div>
     ${inc.noRate ? `<p class="note warn" style="margin:14px 0 0">강사료가 정해지지 않은 수업이 ${inc.noRate}회 있어요. <a href="#data">설정 → 수업별 강사료표</a>에서 입력하면 자동 계산돼요.</p>` : ''}
-    <h2 style="margin-top:18px">기관별 강의 수입</h2>
+    ${inc.other.length ? `<h2 style="margin-top:18px">수업 외 수입</h2><table class="stack"><thead><tr><th>날짜</th><th>내용</th><th>구분</th><th class="r">금액</th><th class="r">공제 후</th></tr></thead><tbody>
+      ${inc.other.map(x => `<tr data-open="incomes" data-id="${esc(x.id)}"><td class="num">${esc(md(x.date))}</td><td>${esc(x.item)}</td><td>${esc(x.cat)}${Number(x.tax) ? ` <span class="tag">${esc(x.tax)}% 공제</span>` : ''}</td><td class="r num">${won(x.amount)}</td><td class="r num">${won(netOf(x))}</td></tr>`).join('')}
+      </tbody></table>` : ''}
+    <h2 style="margin-top:18px">기관별 강의 수입 <span class="n">${won(inc.total)}</span></h2>
     ${gl.length ? `<table class="stack"><thead><tr><th>수업 그룹</th><th class="r">횟수</th><th class="r">차시</th><th class="r">금액</th></tr></thead><tbody>
       ${gl.map(([g, v]) => `<tr data-act="rate" data-g="${esc(g)}"><td>${esc(g)}${v.noRate ? ' <span class="tag" style="--c:#c8371e">금액 미입력</span>' : ''}</td><td class="r num">${v.n}</td><td class="r num">${v.periods}</td><td class="r num">${won(v.amount)}</td></tr>`).join('')}
       </tbody></table>` : '<p class="empty">이 달에 진행한 수업이 없어요.</p>'}
@@ -720,6 +732,13 @@ const FORMS = {
     ['method', '결제수단', 'select', { opts: METHODS }],
     ['color', '블록 색', 'select', { opts: [['', '기본'], ['none', '색 없음'], ...PALETTE_NAMES.map((n, i) => [String(i), n])] }],
     ['memo', '메모', 'text']] },
+  incomes: { t: '수업 외 수입', f: [
+    ['date', '날짜', 'date', { req: 1 }],
+    ['amount', '금액(원, 세전)', 'number', { req: 1, min: 0 }],
+    ['item', '내용', 'text', { req: 1, ph: '예: 교안공모전 상금' }],
+    ['cat', '구분', 'select', { opts: ['사업비', '상금', '교안·원고료', '기타 수입'] }],
+    ['tax', '공제', 'select', { opts: [['0', '공제 없음'], ['3.3', '3.3% (사업소득)'], ['8.8', '8.8% (기타소득)']] }],
+    ['memo', '메모', 'text']] },
   payments: { t: '정기 결제', f: [
     ['name', '이름', 'text', { req: 1, ph: '예: 성빈 수학학원' }],
     ['day', '매월 결제일', 'number', { req: 1, min: 1, max: 31 }],
@@ -734,6 +753,7 @@ const DEFAULTS = {
   events: () => ({ cat: 'class', date: today() }),
   careers: () => ({ kind: 'lecture', start: today() }),
   expenses: () => ({ date: today(), cat: '식비', method: '카드' }),
+  incomes: () => ({ date: today(), cat: '기타 수입', tax: '0' }),
   payments: () => ({ active: true, cat: '교육비(학원비)', method: '자동이체', day: 25 })
 };
 function field(k, label, type, o = {}, v) {
