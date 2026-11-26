@@ -71,7 +71,7 @@ function itemsBetween(from, to) {
   Store.list('events').forEach(e => {
     const end = e.end && e.end >= e.date ? e.end : e.date;
     if (e.date && end >= from && e.date <= to)
-      out.push({ src: 'events', id: e.id, title: e.title, start: e.date, end, time: e.time || '', cat: e.cat, done: !!e.done });
+      out.push({ src: 'events', id: e.id, title: e.title, start: e.date, end, time: e.time || '', cat: e.cat, done: !!e.done, status: e.status });
   });
   Store.list('careers').forEach(c => {
     if (!c.onCal || !c.start) return;
@@ -113,7 +113,7 @@ const listOr = (items, emptyMsg, showDate) => items.length
 const VIEWS = ['today', 'schedule', 'career', 'money', 'data'];
 const now0 = new Date();
 const state = {
-  view: 'today', sel: today(), calY: now0.getFullYear(), calM: now0.getMonth(), hide: new Set(),
+  view: 'today', sel: today(), anchor: new Date(), sview: 'week',
   ctab: 'list', cq: '', ckind: '', cyear: '', group: 'project', onlyStar: false,
   mY: now0.getFullYear(), mM: now0.getMonth()
 };
@@ -147,7 +147,7 @@ function renderToday() {
   $('#v-today').innerHTML = `
   <div class="head">
     <div><div class="today-date">${d.getMonth() + 1}월 ${d.getDate()}일 ${WD[d.getDay()]}요일</div>
-    <div class="sub">오늘 일정 ${sched.length}개 · 이슈 ${issues.filter(i => !i.done).length}개 남음</div></div>
+    <div class="sub">${HOLIDAYS[t] ? `<b style="color:var(--danger)">${esc(HOLIDAYS[t])}</b> · ` : ''}오늘 일정 ${sched.length}개 · 이슈 ${issues.filter(i => !i.done).length}개 남음</div></div>
     <div class="tools">
       <button class="btn pri" data-act="add" data-kind="events">+ 일정</button>
       <button class="btn" data-act="add" data-kind="events" data-cat="issue">+ 오늘의 이슈</button>
@@ -176,41 +176,114 @@ function renderToday() {
   </div>`;
 }
 
-/* ---------- 6. 일정(달력) 화면 ---------- */
-function renderSchedule() {
-  const { calY: y, calM: m } = state;
-  const first = new Date(y, m, 1), start = addDays(first, -first.getDay());
-  const weeks = Math.ceil((first.getDay() + new Date(y, m + 1, 0).getDate()) / 7);
-  const end = addDays(start, weeks * 7 - 1);
-  const items = itemsBetween(ymd(start), ymd(end)).filter(i => !state.hide.has(i.cat));
-  let cells = WD.map(w => `<div class="wd">${w}</div>`).join('');
-  for (let k = 0; k < weeks * 7; k++) {
-    const d = addDays(start, k), s = ymd(d), its = onDay(items, s);
-    const cls = ['day', d.getMonth() !== m && 'out', s === today() && 'now', s === state.sel && 'sel', d.getDay() === 0 && 'sun'].filter(Boolean).join(' ');
-    cells += `<button class="${cls}" data-act="pick" data-date="${s}" aria-label="${d.getMonth() + 1}월 ${d.getDate()}일, 일정 ${its.length}개">
-      <span class="dn">${d.getDate()}</span>
-      ${its.slice(0, 3).map(i => `<span class="chip ${i.done ? 'done' : ''}" style="--c:${catOf(i.cat).c}">${esc(i.title)}</span>`).join('')}
-      ${its.length > 3 ? `<span class="more">+${its.length - 3}</span>` : ''}</button>`;
+/* ---------- 6. 일정 화면: 스프레드시트처럼 보는 주간 표 / 월간 표 ---------- */
+// 공휴일 (우주항공청 월력요항 기준). 해마다 다음 해 목록을 여기에 추가하면 돼요.
+const HOLIDAYS = {
+  '2026-01-01': '신정', '2026-02-16': '설날 연휴', '2026-02-17': '설날', '2026-02-18': '설날 연휴',
+  '2026-03-01': '삼일절', '2026-03-02': '대체공휴일', '2026-05-01': '노동절', '2026-05-05': '어린이날',
+  '2026-05-24': '부처님오신날', '2026-05-25': '대체공휴일', '2026-06-03': '지방선거', '2026-06-06': '현충일',
+  '2026-07-17': '제헌절', '2026-08-15': '광복절', '2026-08-17': '대체공휴일',
+  '2026-09-24': '추석 연휴', '2026-09-25': '추석', '2026-09-26': '추석 연휴',
+  '2026-10-03': '개천절', '2026-10-05': '대체공휴일', '2026-10-09': '한글날', '2026-12-25': '성탄절',
+  '2027-01-01': '신정', '2027-02-06': '설날 연휴', '2027-02-07': '설날', '2027-02-08': '설날 연휴', '2027-02-09': '대체공휴일',
+  '2027-03-01': '삼일절', '2027-05-01': '노동절', '2027-05-03': '대체공휴일', '2027-05-05': '어린이날',
+  '2027-05-13': '부처님오신날', '2027-06-06': '현충일', '2027-07-17': '제헌절', '2027-07-19': '대체공휴일',
+  '2027-08-15': '광복절', '2027-08-16': '대체공휴일', '2027-09-14': '추석 연휴', '2027-09-15': '추석', '2027-09-16': '추석 연휴',
+  '2027-10-03': '개천절', '2027-10-04': '대체공휴일', '2027-10-09': '한글날', '2027-10-11': '대체공휴일',
+  '2027-12-25': '성탄절', '2027-12-27': '대체공휴일'
+};
+// 표의 행 = 분류 (시트와 같은 순서)
+const ROWS = [
+  { k: 'class', n: '수업' }, { k: 'study', n: '학습' }, { k: 'work', n: '업무' }, { k: 'personal', n: '개인' },
+  { k: 'son', n: '성빈' }, { k: 'issue', n: '오늘의 이슈' }, { k: 'pay', n: '결제' }
+];
+// 수업 색: 제목 첫 단어(기관 이름)가 같으면 같은 색. 처음 나온 순서대로 팔레트에서 골라요.
+const PALETTE = [['#e3f1d8', '#2b5713'], ['#dae8fa', '#123f73'], ['#fbe1eb', '#7a2443'], ['#fcefc4', '#664604'], ['#e8e5fd', '#3c3489'],
+  ['#d6f2ea', '#0b5041'], ['#fde3d6', '#7a2f12'], ['#f2e0f6', '#5f2a6b'], ['#dff1f7', '#14536a'], ['#ececec', '#3a3a3a']];
+const keyOf = t => (String(t || '').trim().split(/\s+/)[0] || '').replace(/[()[\],·]/g, '');
+// 휴강·취소 등: 입력창의 '상태'를 우선, 없으면 제목 끝의 (취소)(휴강) 같은 표시로 판단
+const OFF_WORDS = ['휴강', '취소', '결석', '연기', '대체'];
+const isOff = i => i.status ? OFF_WORDS.includes(i.status) : /(휴강|취소|결석|연기|대체)\)\s*(~\s*\d{1,2}:\d{2})?\s*$|모두 휴강/.test(i.title || '');
+const endOf = t => (String(t).match(/~\s*(\d{1,2}:\d{2})/) || [])[1] || '';
+const cleanTitle = t => String(t).replace(/\s*~\s*\d{1,2}:\d{2}/, '').trim();
+function colorMap() {
+  const first = {};
+  Store.list('events').filter(e => e.cat === 'class').forEach(e => { const k = keyOf(e.title); if (!first[k] || e.date < first[k]) first[k] = e.date; });
+  Store.list('careers').filter(c => c.onCal).forEach(c => { const k = keyOf(c.title); if (!first[k] || c.start < first[k]) first[k] = c.start; });
+  const map = {};
+  Object.keys(first).sort((a, b) => first[a].localeCompare(first[b]) || a.localeCompare(b)).forEach((k, i) => { map[k] = PALETTE[i % PALETTE.length]; });
+  return map;
+}
+function chip(i, colors) {
+  const off = isOff(i) || (i.done && (i.cat === 'issue' || i.cat === 'pay'));
+  const time = i.time ? i.time + (endOf(i.title) ? '-' + endOf(i.title) : '') : '';
+  const attr = `data-open="${i.src}" data-id="${esc(i.id)}" title="${esc(i.title)}"`;
+  if (i.cat === 'class') {
+    const [bg, fg] = colors[keyOf(i.title)] || PALETTE[9];
+    return `<span class="gc ${off ? 'off' : ''}" style="--bg:${bg};--fg:${fg}" ${attr}>${esc(cleanTitle(i.title))}${time ? `<small>${time}</small>` : ''}</span>`;
   }
-  const sel = onDay(items, state.sel), sd = parse(state.sel);
+  if (i.cat === 'issue' || i.cat === 'pay') return `<span class="gc hot ${off ? 'off' : ''}" ${attr}>${esc(i.title)}${i.cat === 'pay' && i.done ? ' · 납부' : ''}</span>`;
+  return `<span class="gl ${off ? 'off' : ''}" ${attr}>${time ? `<b>${time}</b> ` : ''}${esc(cleanTitle(i.title))}</span>`;
+}
+function weekBlock(start, month, colors) {
+  const days = [...Array(7)].map((_, k) => addDays(start, k)), ds = days.map(ymd), t = today();
+  const items = itemsBetween(ds[0], ds[6]);
+  const exps = Store.list('expenses').filter(x => x.date >= ds[0] && x.date <= ds[6] && !x.payId);
+  const out = k => month != null && days[k].getMonth() !== month ? ' out' : '';
+  let row = 1;
+  let h = `<div class="wh corner" style="grid-row:1;grid-column:1"></div>` + days.map((d, k) => {
+    const hol = HOLIDAYS[ds[k]];
+    return `<div class="wh${d.getDay() === 0 || hol ? ' red' : ''}${ds[k] === t ? ' now' : ''}${out(k)}" style="grid-row:1;grid-column:${k + 2}">
+      <b>${d.getMonth() + 1}/${d.getDate()}</b> ${WD[d.getDay()]}${hol ? `<span class="hol">${esc(hol)}</span>` : ''}</div>`;
+  }).join('');
+  ROWS.forEach(r => {
+    const its = items.filter(i => i.cat === r.k);
+    const spans = its.filter(i => i.end > i.start), singles = its.filter(i => i.end === i.start);
+    row++;
+    const n = spans.length + 1;
+    h += `<div class="wr" style="grid-row:${row}/span ${n};grid-column:1">${r.n}</div>`;
+    const kind = r.k === 'pay' ? 'expenses' : 'events', catAttr = r.k === 'pay' ? '' : `data-cat="${r.k}"`;
+    const cell = (k, rr, inner, extra = '') => `<div class="wc${ds[k] === t ? ' tc' : ''}${out(k)}${extra}" style="grid-row:${rr};grid-column:${k + 2}" data-act="add" data-kind="${kind}" ${catAttr} data-date="${ds[k]}">${inner}</div>`;
+    spans.forEach((i, si) => {                          // 여러 날 일정은 가로 막대로
+      const rr = row + si, a = Math.max(0, ds.indexOf(i.start) < 0 ? 0 : ds.indexOf(i.start)), b = ds.indexOf(i.end) < 0 ? 6 : ds.indexOf(i.end);
+      for (let k = 0; k < 7; k++) if (k < a || k > b) h += cell(k, rr, '', ' thin');
+      h += `<div class="wsp" style="grid-row:${rr};grid-column:${a + 2}/${b + 3}"><span class="bar ${isOff(i) ? 'off' : ''}" title="${esc(i.title)}" data-open="${i.src}" data-id="${esc(i.id)}">${esc(i.title)}</span></div>`;
+    });
+    const rr = row + spans.length;
+    for (let k = 0; k < 7; k++) {
+      let inner = onDay(singles, ds[k]).map(i => chip(i, colors)).join('');
+      if (r.k === 'pay') inner += exps.filter(x => x.date === ds[k]).map(x => `<span class="gc hot" data-open="expenses" data-id="${esc(x.id)}">${esc(x.item)} ${won(x.amount)}</span>`).join('');
+      h += cell(k, rr, inner);
+    }
+    row = rr;
+  });
+  return `<div class="wscroll"><div class="wg">${h}</div></div>`;
+}
+function renderSchedule() {
+  const a = state.anchor, colors = colorMap();
+  let title, body;
+  if (state.sview === 'week') {
+    const start = addDays(a, -a.getDay()), end = addDays(start, 6);
+    title = `${start.getFullYear()}.${start.getMonth() + 1}.${start.getDate()} – ${end.getMonth() + 1}.${end.getDate()}`;
+    body = weekBlock(start, null, colors);
+  } else {
+    const first = new Date(a.getFullYear(), a.getMonth(), 1), last = new Date(a.getFullYear(), a.getMonth() + 1, 0);
+    title = `${a.getFullYear()}년 ${a.getMonth() + 1}월`;
+    body = '';
+    for (let s = addDays(first, -first.getDay()); s <= last; s = addDays(s, 7)) body += weekBlock(s, a.getMonth(), colors);
+  }
   $('#v-schedule').innerHTML = `
-  <div class="head"><div><h1>일정</h1><div class="sub">수업 · 학습 · 업무 · 개인 · 성빈 · 이슈 · 결제일을 한 달력에서</div></div>
+  <div class="head"><div><h1>일정</h1><div class="sub">빈칸을 누르면 그 날짜·분류로 바로 입력돼요</div></div>
     <div class="tools"><button class="btn pri" data-act="add" data-kind="events">+ 일정 추가</button>
     <button class="btn" data-act="add" data-kind="payments">+ 정기 결제</button></div></div>
-  <div class="filters" role="group" aria-label="분류 보기">${EV_CATS.map(c => `<button data-act="filter" data-cat="${c.k}" style="--c:${c.c}" aria-pressed="${!state.hide.has(c.k)}">${c.n}</button>`).join('')}</div>
-  <div class="grid2">
-    <div>
-      <div class="calbar"><h2>${y}년 ${m + 1}월</h2>
-        <button class="btn sm" data-act="month" data-d="-1" aria-label="이전 달">‹</button>
-        <button class="btn sm" data-act="month" data-d="0">오늘</button>
-        <button class="btn sm" data-act="month" data-d="1" aria-label="다음 달">›</button></div>
-      <div class="cal">${cells}</div>
-    </div>
-    <div class="card"><h2>${sd.getMonth() + 1}월 ${sd.getDate()}일 ${WD[sd.getDay()]}요일</h2>
-      ${listOr(sel, '이 날은 일정이 없어요.')}
-      <p style="margin:14px 0 0"><button class="btn" data-act="add" data-kind="events" data-date="${state.sel}">+ 이 날에 일정 추가</button></p>
-    </div>
-  </div>`;
+  <div class="calbar"><h2>${title}</h2>
+    <button class="btn sm" data-act="wnav" data-d="-1" aria-label="이전">‹</button>
+    <button class="btn sm" data-act="wnav" data-d="0">오늘</button>
+    <button class="btn sm" data-act="wnav" data-d="1" aria-label="다음">›</button>
+    <span style="flex:1"></span>
+    <div class="seg" role="group" aria-label="보기">${[['week', '주간 표'], ['month', '월간 표']].map(([k, n]) => `<button data-act="sview" data-v="${k}" aria-pressed="${state.sview === k}">${n}</button>`).join('')}</div>
+  </div>
+  ${body}`;
 }
 
 /* ---------- 7. 커리어 화면: 기록 목록 / 이력서 / 포트폴리오 ---------- */
@@ -436,6 +509,7 @@ const FORMS = {
     ['time', '시간', 'time'],
     ['date', '날짜', 'date', { req: 1 }],
     ['end', '끝나는 날 (여러 날일 때)', 'date'],
+    ['status', '상태', 'select', { opts: [['진행', '정상 진행'], ...OFF_WORDS.map(w => [w, w])] }],
     ['memo', '메모', 'textarea']] },
   careers: { t: '커리어 기록', f: [
     ['kind', '구분', 'select', { opts: CAREER_KINDS.map(c => [c.k, c.n]) }],
@@ -469,7 +543,7 @@ const FORMS = {
     ['active', '사용 중 (끄면 달력에서 숨김)', 'check']] }
 };
 const DEFAULTS = {
-  events: () => ({ cat: 'class', date: state.view === 'schedule' ? state.sel : today() }),
+  events: () => ({ cat: 'class', date: today() }),
   careers: () => ({ kind: 'lecture', start: today() }),
   expenses: () => ({ date: today(), cat: '식비', method: '카드' }),
   payments: () => ({ active: true, cat: '교육비(학원비)', method: '자동이체', day: 25 })
@@ -514,12 +588,12 @@ function openForm(kind, obj) {
 /* ---------- 11. 버튼 처리: 화면 어디를 누르든 여기서 한 번에 받습니다 ---------- */
 document.addEventListener('click', async e => {
   if (e.target.closest('[data-stop]')) return;
-  const a = e.target.closest('[data-act]');
-  if (!a) {                                         // 목록 한 줄을 누르면 수정창 열기
-    const row = e.target.closest('[data-open]');
-    if (row) { const item = Store.get(row.dataset.open, row.dataset.id); if (item) openForm(row.dataset.open, item); }
+  const a = e.target.closest('[data-act]'), row = e.target.closest('[data-open]');
+  if (row && (!a || a.contains(row))) {             // 항목을 누르면 수정창 열기 (칸 안의 항목 포함)
+    const item = Store.get(row.dataset.open, row.dataset.id); if (item) openForm(row.dataset.open, item);
     return;
   }
+  if (!a) return;
   const act = a.dataset.act;
   if (act === 'add') {
     const o = DEFAULTS[a.dataset.kind]();
@@ -527,10 +601,9 @@ document.addEventListener('click', async e => {
     if (a.dataset.date) o.date = a.dataset.date;
     openForm(a.dataset.kind, o);
   }
-  if (act === 'pick') { state.sel = a.dataset.date; const d = parse(state.sel); if (d.getMonth() !== state.calM) { state.calY = d.getFullYear(); state.calM = d.getMonth(); } renderSchedule(); }
-  if (act === 'month') { const d = +a.dataset.d; if (!d) { const n = new Date(); state.calY = n.getFullYear(); state.calM = n.getMonth(); state.sel = today(); } else { const n = new Date(state.calY, state.calM + d, 1); state.calY = n.getFullYear(); state.calM = n.getMonth(); } renderSchedule(); }
+  if (act === 'wnav') { const d = +a.dataset.d, x = state.anchor; state.anchor = !d ? new Date() : state.sview === 'week' ? addDays(x, 7 * d) : new Date(x.getFullYear(), x.getMonth() + d, 1); renderSchedule(); }
+  if (act === 'sview') { state.sview = a.dataset.v; renderSchedule(); }
   if (act === 'mmonth') { const d = +a.dataset.d; const n = d ? new Date(state.mY, state.mM + d, 1) : new Date(); state.mY = n.getFullYear(); state.mM = n.getMonth(); renderMoney(); }
-  if (act === 'filter') { const c = a.dataset.cat; state.hide.has(c) ? state.hide.delete(c) : state.hide.add(c); renderSchedule(); }
   if (act === 'done') { const ev = Store.get('events', a.dataset.id); if (ev) Store.save('events', { ...ev, done: a.checked }); }
   if (act === 'pay') {
     const p = Store.get('payments', a.dataset.id), mon = a.dataset.month; if (!p) return;
