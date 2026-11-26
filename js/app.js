@@ -90,7 +90,8 @@ function itemsBetween(from, to) {
       out.push({ src: 'payments', id: p.id, title: `${p.name} ${won(p.amount)}`, start: d, end: d, time: '', cat: 'pay', month, done: isPaid(p.id, month) });
     });
   }
-  return out.sort((a, b) => (a.start + (a.time || '99')).localeCompare(b.start + (b.time || '99')));
+  // 날짜 → 시작 시간 → 끝 시간 순 (시간 없는 일정은 그날 맨 뒤)
+  return out.sort((a, b) => (a.start + (a.time || '99:99') + (a.endTime || '')).localeCompare(b.start + (b.time || '99:99') + (b.endTime || '')));
 }
 const onDay = (items, d) => items.filter(i => i.start <= d && i.end >= d);
 const isPaid = (pid, month) => Store.list('expenses').some(x => x.payId === pid && x.payMonth === month);
