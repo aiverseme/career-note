@@ -99,6 +99,9 @@ textarea{resize:vertical}
 .spanbar{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:4px 8px;border-radius:6px;background:#bfeef0;color:#0b4a52;font-size:12.5px;text-align:center;cursor:pointer;font-weight:500}
 .gc{display:block;border-radius:6px;padding:4px 5px;background:var(--bg);color:var(--fg);text-align:center;cursor:pointer;font-size:12.5px;overflow-wrap:anywhere}
 .gc small{display:block;font-size:12px;opacity:.85;font-variant-numeric:tabular-nums}
+.imp{box-shadow:inset 0 0 0 2px var(--danger);font-weight:600}
+.impcard{border-color:var(--danger);border-width:2px}
+.gl.imp{padding:2px 4px}
 .gc.plain{border:1px solid var(--line)}
 .gc.hot{--bg:#fde2df;--fg:#8a1d10}
 .gl{display:block;cursor:pointer;font-size:12.5px;padding:1px 3px;border-radius:4px;overflow-wrap:anywhere}
@@ -159,7 +162,7 @@ tbody tr:hover{background:var(--soft)}
 .income{margin-bottom:18px}
 .income .stats{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
 .neg{color:var(--danger)}
-.note a{color:var(--acc);font-weight:600}
+.note a,.card p a:not(.btn){color:var(--acc);font-weight:600}
 details summary{cursor:pointer;color:var(--acc);font-weight:500;min-height:32px}
 tr.off td{text-decoration:line-through;opacity:.5}
 .rates{display:grid;gap:8px}

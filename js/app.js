@@ -71,7 +71,7 @@ function itemsBetween(from, to) {
   Store.list('events').forEach(e => {
     const end = e.end && e.end >= e.date ? e.end : e.date;
     if (e.date && end >= from && e.date <= to)
-      out.push({ src: 'events', id: e.id, title: e.title, start: e.date, end, time: e.time || '', endTime: e.endTime || '', role: e.role || '', color: e.color ?? '', cat: e.cat, done: !!e.done, status: e.status });
+      out.push({ src: 'events', id: e.id, title: e.title, start: e.date, end, time: e.time || '', endTime: e.endTime || '', role: e.role || '', color: e.color ?? '', imp: !!e.important, cat: e.cat, done: !!e.done, status: e.status });
   });
   Store.list('careers').forEach(c => {
     if (!c.onCal || !c.start) return;
@@ -87,7 +87,7 @@ function itemsBetween(from, to) {
       const d = ymd(new Date(m.getFullYear(), m.getMonth(), Math.min(Number(p.day) || 1, last)));
       if (d < from || d > to) return;
       const month = d.slice(0, 7);
-      out.push({ src: 'payments', id: p.id, title: `${p.name} ${won(p.amount)}`, start: d, end: d, time: '', cat: 'pay', month, done: isPaid(p.id, month) });
+      out.push({ src: 'payments', id: p.id, title: `${p.name} ${won(p.amount)}`, start: d, end: d, time: '', cat: 'pay', color: p.color ?? '', month, done: isPaid(p.id, month) });
     });
   }
   // 날짜 → 시작 시간 → 끝 시간 순 (시간 없는 일정은 그날 맨 뒤)
@@ -104,7 +104,7 @@ function itemRow(i, showDate) {
   if (i.cat === 'pay') ctl = `<button class="btn sm ${i.done ? 'ghost' : 'pri'}" data-act="pay" data-id="${esc(i.id)}" data-month="${i.month}">${i.done ? '납부 완료' : '납부 처리'}</button>`;
   return `<li class="it" data-open="${i.src}" data-id="${esc(i.id)}">
     <span class="tm">${esc(lead)}</span><span class="tag" style="--c:${c.c}">${c.n}</span>
-    <span class="tt ${i.done ? 'done' : ''}">${esc(i.title)}</span>${ctl || '<span></span>'}</li>`;
+    <span class="tt ${i.done ? 'done' : ''}">${i.imp ? '<span class="star">★</span> ' : ''}${esc(i.title)}</span>${ctl || '<span></span>'}</li>`;
 }
 const listOr = (items, emptyMsg, showDate) => items.length
   ? `<ul class="list">${items.map(i => itemRow(i, showDate)).join('')}</ul>`
@@ -158,6 +158,7 @@ function renderToday() {
   </div>
   <div class="grid2">
     <div class="stackv">
+      ${(() => { const imp = itemsBetween(t, ymd(addDays(d, 30))).filter(i => i.imp); return imp.length ? `<div class="card impcard"><h2><span class="star">★</span> 중요 일정 <span class="n">30일 이내</span></h2>${listOr(imp, '', true)}</div>` : ''; })()}
       <div class="card"><h2>오늘 일정</h2>${listOr(sched, '오늘은 등록된 일정이 없어요.')}</div>
       <div class="card"><h2>오늘의 이슈 <span class="n">잊지 말 것, 처리할 것</span></h2>${listOr(issues, '오늘 챙길 이슈가 없어요.')}</div>
       <div class="card"><h2>앞으로 2주</h2>${listOr(next, '2주 안에 예정된 일정이 없어요.', true)}</div>
@@ -172,7 +173,7 @@ function renderToday() {
         ${ongoing.length ? `<h2 style="margin-top:16px">진행 중</h2><ul class="list">${ongoing.map(c => `<li class="it" data-open="careers" data-id="${esc(c.id)}"><span class="tm">~${esc(md(c.end || c.start))}</span><span class="tag">${esc(kindOf(c.kind).n)}</span><span class="tt">${esc(c.title)}</span><span></span></li>`).join('')}</ul>` : ''}
         <p style="margin:14px 0 0"><a href="#career" class="btn sm" style="display:inline-flex;align-items:center;text-decoration:none">커리어 전체 보기</a></p>
       </div>
-      <div class="card"><h2>${d.getMonth() + 1}월 강의 수입</h2>${(() => { const inc = monthIncome(t.slice(0, 7)); return `<div class="stats" style="grid-template-columns:repeat(2,minmax(0,1fr))"><div class="stat"><b class="num">${inc.total.toLocaleString('ko-KR')}</b><span>원 · ${inc.live.length}회</span></div>${Store.profile().tax33 ? `<div class="stat"><b class="num">${net33(inc.total).toLocaleString('ko-KR')}</b><span>3.3% 공제 후</span></div>` : ''}</div>${inc.noRate ? `<p class="mute" style="font-size:14px;margin:10px 0 0">시급 미입력 ${inc.noRate}회 · <a href="#data">시급표 입력</a></p>` : ''}<p style="margin:12px 0 0"><a href="#money" class="btn sm" style="display:inline-flex;align-items:center;text-decoration:none">수입·지출 보기</a></p>`; })()}</div>
+      <div class="card"><h2>${d.getMonth() + 1}월 강의 수입</h2>${(() => { const inc = monthIncome(t.slice(0, 7)); return `<div class="stats" style="grid-template-columns:repeat(2,minmax(0,1fr))"><div class="stat"><b class="num">${inc.total.toLocaleString('ko-KR')}</b><span>원 · ${inc.live.length}회</span></div>${Store.profile().tax33 ? `<div class="stat"><b class="num">${net33(inc.total).toLocaleString('ko-KR')}</b><span>3.3% 공제 후</span></div>` : ''}</div>${inc.noRate ? `<p class="mute" style="font-size:14px;margin:10px 0 0">금액 미입력 ${inc.noRate}회 · <a href="#data">강사료표 입력</a></p>` : ''}<p style="margin:12px 0 0"><a href="#money" class="btn sm" style="display:inline-flex;align-items:center;text-decoration:none">수입·지출 보기</a></p>`; })()}</div>
       <div class="card"><h2>결제 예정 <span class="n">10일 이내</span></h2>${listOr(pays, '다가오는 정기 결제가 없어요.', true)}</div>
     </div>
   </div>`;
@@ -220,17 +221,19 @@ function colorMap() {
   Object.entries(custom).forEach(([k, v]) => { if (v === 'none' || PALETTE[v]) map[k] = v; });
   return map;   // 값: 팔레트 번호 또는 'none'
 }
+// 블록 색: 직접 고른 색 > (수업이면) 기관 색 > 분류 기본 모양
+const colorStyle = c => c === 'none' ? '--bg:transparent;--fg:var(--ink)' : `--bg:${PALETTE[c][0]};--fg:${PALETTE[c][1]}`;
+const hasColor = v => v !== '' && v != null;
 function chip(i, colors) {
   const off = isOff(i) || (i.done && (i.cat === 'issue' || i.cat === 'pay'));
   const et = i.endTime || endOf(i.title), time = i.time ? i.time + (et ? '-' + et : '') : '';
-  const attr = `data-open="${i.src}" data-id="${esc(i.id)}" title="${esc(i.title)}"`;
-  if (i.cat === 'class') {
-    const c = i.color !== '' && i.color != null ? i.color : (colors[keyOf(i.title)] ?? 9);
-    const style = c === 'none' ? '--bg:transparent;--fg:var(--ink)' : `--bg:${PALETTE[c][0]};--fg:${PALETTE[c][1]}`;
-    return `<span class="gc ${c === 'none' ? 'plain' : ''} ${off ? 'off' : ''}" style="${style}" ${attr}>${esc(cleanTitle(i.title))}${time ? `<small>${time}</small>` : ''}</span>`;
-  }
-  if (i.cat === 'issue' || i.cat === 'pay') return `<span class="gc hot ${off ? 'off' : ''}" ${attr}>${esc(i.title)}${i.cat === 'pay' && i.done ? ' · 납부' : ''}</span>`;
-  return `<span class="gl ${off ? 'off' : ''}" ${attr}>${time ? `<b>${time}</b> ` : ''}${esc(cleanTitle(i.title))}</span>`;
+  const attr = `data-open="${i.src}" data-id="${esc(i.id)}" title="${esc(i.title)}${i.imp ? ' (중요)' : ''}"`;
+  const star = i.imp ? '<span class="star">★</span> ' : '', imp = i.imp ? ' imp' : '';
+  const name = esc(cleanTitle(i.title)) + (i.cat === 'pay' && i.done ? ' · 납부' : '');
+  const c = hasColor(i.color) ? i.color : i.cat === 'class' ? (colors[keyOf(i.title)] ?? 9) : null;
+  if (c != null) return `<span class="gc ${c === 'none' ? 'plain' : ''}${off ? ' off' : ''}${imp}" style="${colorStyle(c)}" ${attr}>${star}${name}${time ? `<small>${time}</small>` : ''}</span>`;
+  if (i.cat === 'issue' || i.cat === 'pay') return `<span class="gc hot${off ? ' off' : ''}${imp}" ${attr}>${star}${name}</span>`;
+  return `<span class="gl${off ? ' off' : ''}${imp}" ${attr}>${star}${time ? `<b>${time}</b> ` : ''}${name}</span>`;
 }
 function weekBlock(start, month, colors) {
   const days = [...Array(7)].map((_, k) => addDays(start, k)), ds = days.map(ymd), t = today();
@@ -254,12 +257,12 @@ function weekBlock(start, month, colors) {
     spans.forEach((i, si) => {                          // 여러 날 일정은 가로 막대로
       const rr = row + si, a = Math.max(0, ds.indexOf(i.start) < 0 ? 0 : ds.indexOf(i.start)), b = ds.indexOf(i.end) < 0 ? 6 : ds.indexOf(i.end);
       for (let k = 0; k < 7; k++) if (k < a || k > b) h += cell(k, rr, '', ' thin');
-      h += `<div class="wsp" style="grid-row:${rr};grid-column:${a + 2}/${b + 3}"><span class="spanbar ${isOff(i) ? 'off' : ''}" title="${esc(i.title)}" data-open="${i.src}" data-id="${esc(i.id)}">${esc(i.title)}</span></div>`;
+      h += `<div class="wsp" style="grid-row:${rr};grid-column:${a + 2}/${b + 3}"><span class="spanbar ${isOff(i) ? 'off' : ''}${i.imp ? ' imp' : ''}" ${hasColor(i.color) ? `style="background:var(--bg);color:var(--fg);${colorStyle(i.color)}"` : ''} title="${esc(i.title)}" data-open="${i.src}" data-id="${esc(i.id)}">${i.imp ? '★ ' : ''}${esc(i.title)}</span></div>`;
     });
     const rr = row + spans.length;
     for (let k = 0; k < 7; k++) {
       let inner = onDay(singles, ds[k]).map(i => chip(i, colors)).join('');
-      if (r.k === 'pay') inner += exps.filter(x => x.date === ds[k]).map(x => `<span class="gc hot" data-open="expenses" data-id="${esc(x.id)}">${esc(x.item)} ${won(x.amount)}</span>`).join('');
+      if (r.k === 'pay') inner += exps.filter(x => x.date === ds[k]).map(x => `<span class="gc ${hasColor(x.color) ? (x.color === 'none' ? 'plain' : '') : 'hot'}" ${hasColor(x.color) ? `style="${colorStyle(x.color)}"` : ''} data-open="expenses" data-id="${esc(x.id)}">${esc(x.item)} ${won(x.amount)}</span>`).join('');
       h += cell(k, rr, inner);
     }
     row = rr;
@@ -624,7 +627,8 @@ const FORMS = {
     ['end', '끝나는 날 (여러 날일 때)', 'date'],
     ['status', '상태', 'select', { opts: [['진행', '정상 진행'], ...OFF_WORDS.map(w => [w, w])] }],
     ['role', '역할', 'select', { opts: [['', '해당 없음'], ['주강', '주강'], ['보조강', '보조강']], only: 'class' }],
-    ['color', '블록 색 (이 수업만)', 'select', { opts: [['', '기관 색 그대로'], ['none', '색 없음'], ...PALETTE_NAMES.map((n, i) => [String(i), n])], only: 'class' }],
+    ['color', '블록 색', 'select', { opts: [['', '기본'], ['none', '색 없음'], ...PALETTE_NAMES.map((n, i) => [String(i), n])] }],
+    ['important', '★ 중요 일정으로 표시', 'check'],
     ['hours', '인정 시간(시간) — 비우면 자동', 'number', { step: '0.01', min: 0, only: 'class' }],
     ['pay', '강사료(원) — 비우면 시급표로 자동', 'number', { step: '1000', min: 0, only: 'class' }],
     ['memo', '메모', 'textarea']] },
@@ -649,6 +653,7 @@ const FORMS = {
     ['item', '내용', 'text', { req: 1, ph: '예: 점심, 교재 구입' }],
     ['cat', '분류', 'select', { opts: EXP_CATS }],
     ['method', '결제수단', 'select', { opts: METHODS }],
+    ['color', '블록 색', 'select', { opts: [['', '기본'], ['none', '색 없음'], ...PALETTE_NAMES.map((n, i) => [String(i), n])] }],
     ['memo', '메모', 'text']] },
   payments: { t: '정기 결제', f: [
     ['name', '이름', 'text', { req: 1, ph: '예: 성빈 수학학원' }],
@@ -656,6 +661,7 @@ const FORMS = {
     ['amount', '금액(원)', 'number', { req: 1, min: 0 }],
     ['cat', '분류', 'select', { opts: EXP_CATS }],
     ['method', '결제수단', 'select', { opts: METHODS }],
+    ['color', '블록 색', 'select', { opts: [['', '기본'], ['none', '색 없음'], ...PALETTE_NAMES.map((n, i) => [String(i), n])] }],
     ['memo', '메모', 'text'],
     ['active', '사용 중 (끄면 달력에서 숨김)', 'check']] }
 };
@@ -704,7 +710,7 @@ function openForm(kind, obj) {
       out[k] = t === 'check' ? el.checked : t === 'number' ? (el.value === '' ? '' : Number(el.value)) : el.value.trim();
     });
     if (out.end && out.end < (out.date || out.start)) out.end = '';
-    if (kind === 'events' && out.color !== '' && out.color !== 'none' && out.color != null) out.color = Number(out.color);
+    if (out.color !== '' && out.color !== 'none' && out.color != null) out.color = Number(out.color);
     if (out.link && !safeUrl(out.link)) { toast('링크는 https://로 시작해야 해요'); return; }
     Store.save(kind, out); dlg.close(); toast('저장했어요');
   };
