@@ -623,7 +623,7 @@ document.addEventListener('click', async e => {
   if (act === 'download') {
     try {
       const url = URL.createObjectURL(new Blob([Store.exportAll()], { type: 'application/json' }));
-      const l = document.createElement('a'); l.href = url; l.download = `커리어노트-백업-${today()}.json`; l.click();
+      const l = document.createElement('a'); l.href = url; l.download = `티칭로그-백업-${today()}.json`; l.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (err) { copyText(Store.exportAll()); }
   }

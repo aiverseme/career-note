@@ -140,7 +140,7 @@ const Store = (() => {
 
     /* ----- 백업·옮기기 ----- */
     exportAll() {
-      return JSON.stringify({ app: 'career-note', version: 2, exported: new Date().toISOString(), ...data }, null, 2);
+      return JSON.stringify({ app: 'teaching-log', version: 2, exported: new Date().toISOString(), ...data }, null, 2);
     },
     async importAll(text, mode) {
       const d = JSON.parse(text);
