@@ -428,7 +428,7 @@ function defaultRate(g) {
 const toMin = hm => { const [h, m] = hm.split(':').map(Number); return h * 60 + m; };
 const rates = () => Store.profile().rates || {};
 // 사업별·연도별 금액 (예: 2025년 SW미래채움 블록당 60,000원)
-const PROGRAMS = ['SW미래채움'];
+const PROGRAMS = ['SW미래채움', '게임재단'];
 const progRates = () => Store.profile().progRates || {};
 // 수업 블록 1개의 수입: 수동 금액 > 사업·연도 금액 > 강사료표 > 기본 규칙
 function incomeOf(e) {
