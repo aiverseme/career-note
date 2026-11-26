@@ -71,7 +71,7 @@ function itemsBetween(from, to) {
   Store.list('events').forEach(e => {
     const end = e.end && e.end >= e.date ? e.end : e.date;
     if (e.date && end >= from && e.date <= to)
-      out.push({ src: 'events', id: e.id, title: e.title, start: e.date, end, time: e.time || '', cat: e.cat, done: !!e.done, status: e.status });
+      out.push({ src: 'events', id: e.id, title: e.title, start: e.date, end, time: e.time || '', endTime: e.endTime || '', role: e.role || '', color: e.color ?? '', cat: e.cat, done: !!e.done, status: e.status });
   });
   Store.list('careers').forEach(c => {
     if (!c.onCal || !c.start) return;
@@ -97,7 +97,7 @@ const isPaid = (pid, month) => Store.list('expenses').some(x => x.payId === pid 
 
 function itemRow(i, showDate) {
   const c = catOf(i.cat);
-  const lead = showDate ? md(i.start) : (i.time || (i.cat === 'pay' ? '결제' : '종일'));
+  const lead = showDate ? md(i.start) : (i.time ? i.time + (i.endTime ? '-' + i.endTime : '') : (i.cat === 'pay' ? '결제' : '종일'));
   let ctl = '';
   if (i.cat === 'issue' && i.src === 'events') ctl = `<input type="checkbox" data-act="done" data-id="${esc(i.id)}" ${i.done ? 'checked' : ''} aria-label="완료">`;
   if (i.cat === 'pay') ctl = `<button class="btn sm ${i.done ? 'ghost' : 'pri'}" data-act="pay" data-id="${esc(i.id)}" data-month="${i.month}">${i.done ? '납부 완료' : '납부 처리'}</button>`;
@@ -201,6 +201,8 @@ const ROWS = [
 // 수업 색: 제목 첫 단어(기관 이름)가 같으면 같은 색. 처음 나온 순서대로 팔레트에서 골라요.
 const PALETTE = [['#e3f1d8', '#2b5713'], ['#dae8fa', '#123f73'], ['#fbe1eb', '#7a2443'], ['#fcefc4', '#664604'], ['#e8e5fd', '#3c3489'],
   ['#d6f2ea', '#0b5041'], ['#fde3d6', '#7a2f12'], ['#f2e0f6', '#5f2a6b'], ['#dff1f7', '#14536a'], ['#ececec', '#3a3a3a']];
+const PALETTE_NAMES = ['초록', '파랑', '분홍', '노랑', '보라', '청록', '주황', '자주', '하늘', '회색'];
+const swatch = c => c === 'none' ? 'background:transparent;border:1px dashed var(--mute)' : `background:${PALETTE[c][0]};border:1px solid ${PALETTE[c][1]}`;
 const keyOf = t => (String(t || '').trim().split(/\s+/)[0] || '').replace(/[()[\],·]/g, '');
 // 휴강·취소 등: 입력창의 '상태'를 우선, 없으면 제목 끝의 (취소)(휴강) 같은 표시로 판단
 const OFF_WORDS = ['휴강', '취소', '결석', '연기', '대체'];
@@ -212,16 +214,19 @@ function colorMap() {
   Store.list('events').filter(e => e.cat === 'class').forEach(e => { const k = keyOf(e.title); if (!first[k] || e.date < first[k]) first[k] = e.date; });
   Store.list('careers').filter(c => c.onCal).forEach(c => { const k = keyOf(c.title); if (!first[k] || c.start < first[k]) first[k] = c.start; });
   const map = {};
-  Object.keys(first).sort((a, b) => first[a].localeCompare(first[b]) || a.localeCompare(b)).forEach((k, i) => { map[k] = PALETTE[i % PALETTE.length]; });
-  return map;
+  Object.keys(first).sort((a, b) => first[a].localeCompare(first[b]) || a.localeCompare(b)).forEach((k, i) => { map[k] = i % PALETTE.length; });
+  const custom = Store.profile().colors || {};          // 설정에서 직접 고른 색이 우선
+  Object.entries(custom).forEach(([k, v]) => { if (v === 'none' || PALETTE[v]) map[k] = v; });
+  return map;   // 값: 팔레트 번호 또는 'none'
 }
 function chip(i, colors) {
   const off = isOff(i) || (i.done && (i.cat === 'issue' || i.cat === 'pay'));
-  const time = i.time ? i.time + (endOf(i.title) ? '-' + endOf(i.title) : '') : '';
+  const et = i.endTime || endOf(i.title), time = i.time ? i.time + (et ? '-' + et : '') : '';
   const attr = `data-open="${i.src}" data-id="${esc(i.id)}" title="${esc(i.title)}"`;
   if (i.cat === 'class') {
-    const [bg, fg] = colors[keyOf(i.title)] || PALETTE[9];
-    return `<span class="gc ${off ? 'off' : ''}" style="--bg:${bg};--fg:${fg}" ${attr}>${esc(cleanTitle(i.title))}${time ? `<small>${time}</small>` : ''}</span>`;
+    const c = i.color !== '' && i.color != null ? i.color : (colors[keyOf(i.title)] ?? 9);
+    const style = c === 'none' ? '--bg:transparent;--fg:var(--ink)' : `--bg:${PALETTE[c][0]};--fg:${PALETTE[c][1]}`;
+    return `<span class="gc ${c === 'none' ? 'plain' : ''} ${off ? 'off' : ''}" style="${style}" ${attr}>${esc(cleanTitle(i.title))}${time ? `<small>${time}</small>` : ''}</span>`;
   }
   if (i.cat === 'issue' || i.cat === 'pay') return `<span class="gc hot ${off ? 'off' : ''}" ${attr}>${esc(i.title)}${i.cat === 'pay' && i.done ? ' · 납부' : ''}</span>`;
   return `<span class="gl ${off ? 'off' : ''}" ${attr}>${time ? `<b>${time}</b> ` : ''}${esc(cleanTitle(i.title))}</span>`;
@@ -399,23 +404,32 @@ function portfolio(list) {
 
 /* ---------- 8-1. 강의 수입 계산 ---------- */
 // 수업 그룹: 제목 첫 단어(기관) + 주강/보조강 구분. 시급표는 이 이름으로 저장돼요.
-const groupOf = t => { const k = keyOf(t), r = /보조강/.test(t) ? ' · 보조강' : /주강/.test(t) ? ' · 주강' : ''; return k + r; };
+const roleOf = e => e.role || (/보조강/.test(e.title || '') ? '보조강' : /주강/.test(e.title || '') ? '주강' : '');
+const groupOf = e => { const k = keyOf(e.title), r = roleOf(e); return k + (r ? ' · ' + r : ''); };
+// 시급표에 없는 그룹에 쓰는 기본 규칙 (회당 금액)
+function defaultRate(g) {
+  if (/도서관/.test(g)) return { mode: 'session', amount: 120000, rule: '그외 도서관' };
+  if (/보조강/.test(g)) return { mode: 'session', amount: 60000, rule: '학교 보조강' };
+  if (/주강/.test(g) || /(초|중|고|학교|직업계)(\s|$)/.test(g)) return { mode: 'session', amount: 100000, rule: '학교 주강' };
+  return null;
+}
 const toMin = hm => { const [h, m] = hm.split(':').map(Number); return h * 60 + m; };
 // 수업 시간(시간 단위): 제목 속 "09:20-10:20" 같은 구간을 모두 더하고, 없으면 시작 시간 ~ 끝 시간
 function autoHours(e) {
   const ranges = [...String(e.title || '').matchAll(/(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})/g)];
-  let min = ranges.reduce((s, r) => s + Math.max(0, toMin(r[2]) - toMin(r[1])), 0);
+  let min = e.time && e.endTime ? Math.max(0, toMin(e.endTime) - toMin(e.time)) : 0;
+  if (!min) min = ranges.reduce((s, r) => s + Math.max(0, toMin(r[2]) - toMin(r[1])), 0);
   if (!min && e.time && endOf(e.title)) min = Math.max(0, toMin(endOf(e.title)) - toMin(e.time));
   return Math.round(min / 60 * 100) / 100;
 }
 const rates = () => Store.profile().rates || {};
 // 수업 한 건의 수입: 수동 금액 > (시급 × 시간 또는 회당 금액)
 function incomeOf(e) {
-  const g = groupOf(e.title), r = rates()[g] || {}, hours = e.hours !== '' && e.hours != null ? Number(e.hours) : autoHours(e);
+  const g = groupOf(e), r = rates()[g]?.amount ? rates()[g] : (defaultRate(g) || {}), hours = e.hours !== '' && e.hours != null ? Number(e.hours) : autoHours(e);
   const off = isOff({ title: e.title, status: e.status });
   const auto = !r.amount ? null : r.mode === 'session' ? Number(r.amount) : Math.round(Number(r.amount) * hours);
   const manual = e.pay !== '' && e.pay != null;
-  return { g, hours, off, manual, noRate: !manual && auto == null, amount: off ? 0 : manual ? Number(e.pay) : (auto || 0), autoAmount: auto };
+  return { g, hours, off, manual, rule: r.rule, noRate: !manual && auto == null, amount: off ? 0 : manual ? Number(e.pay) : (auto || 0), autoAmount: auto };
 }
 function monthIncome(mon) {
   const rows = Store.list('events').filter(e => e.cat === 'class' && (e.date || '').startsWith(mon)).map(e => ({ e, ...incomeOf(e) }));
@@ -493,19 +507,32 @@ function renderMoney() {
   </div>`;
 }
 
+function colorTable() {
+  const map = colorMap(), custom = Store.profile().colors || {};
+  const keys = Object.keys(map).sort((a, b) => a.localeCompare(b, 'ko'));
+  if (!keys.length) return '';
+  return `<div class="card"><h2>수업 블록 색 <span class="n">기관별로 바로 저장돼요</span></h2><div class="rates">${keys.map(k => `<div class="rate crow">
+      <span class="sw" style="${swatch(map[k])}"></span><b>${esc(k)}</b>
+      <select data-color="${esc(k)}" aria-label="${esc(k)} 블록 색">
+        <option value="" ${custom[k] == null ? 'selected' : ''}>자동</option>
+        <option value="none" ${custom[k] === 'none' ? 'selected' : ''}>색 없음</option>
+        ${PALETTE_NAMES.map((n, i) => `<option value="${i}" ${custom[k] === i ? 'selected' : ''}>${n}</option>`).join('')}
+      </select></div>`).join('')}</div></div>`;
+}
+
 function rateTable() {
   const cnt = {};
-  Store.list('events').filter(e => e.cat === 'class').forEach(e => { const g = groupOf(e.title); if (g) cnt[g] = (cnt[g] || 0) + 1; });
+  Store.list('events').filter(e => e.cat === 'class').forEach(e => { const g = groupOf(e); if (g) cnt[g] = (cnt[g] || 0) + 1; });
   const r = rates(); Object.keys(r).forEach(g => { cnt[g] ||= 0; });
   const list = Object.entries(cnt).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
-  return `<form class="card" id="rform"><h2>수업별 시급표 <span class="n">한 번 넣으면 같은 그룹 수업에 자동 적용</span></h2>
+  return `<form class="card" id="rform"><h2>수업별 강사료표 <span class="n">한 번 넣으면 같은 그룹 수업에 자동 적용</span></h2>
     ${list.length ? `<div class="rates">${list.map(([g, n]) => `<div class="rate" data-g="${esc(g)}">
       <span><b>${esc(g)}</b><br><span class="mute">수업 ${n}회</span></span>
-      <select aria-label="${esc(g)} 지급 방식"><option value="hour" ${r[g]?.mode !== 'session' ? 'selected' : ''}>시급</option><option value="session" ${r[g]?.mode === 'session' ? 'selected' : ''}>회당</option></select>
-      <input type="number" inputmode="numeric" min="0" step="1000" placeholder="금액(원)" value="${r[g]?.amount ?? ''}" aria-label="${esc(g)} 금액"></div>`).join('')}</div>` : '<p class="empty">수업 일정을 입력하면 기관별로 여기에 나타나요.</p>'}
+      <select aria-label="${esc(g)} 지급 방식"><option value="session" ${r[g]?.mode !== 'hour' ? 'selected' : ''}>회당</option><option value="hour" ${r[g]?.mode === 'hour' ? 'selected' : ''}>시급</option></select>
+      <input type="number" inputmode="numeric" min="0" step="1000" placeholder="${defaultRate(g) ? '기본 ' + defaultRate(g).amount.toLocaleString('ko-KR') : '금액(원)'}" value="${r[g]?.amount ?? ''}" aria-label="${esc(g)} 금액"></div>`).join('')}</div>` : '<p class="empty">수업 일정을 입력하면 기관별로 여기에 나타나요.</p>'}
     <label class="ck" style="margin-top:10px"><input type="checkbox" id="r_tax" ${Store.profile().tax33 ? 'checked' : ''}><span>수입 화면에 3.3% 원천징수 후 금액도 보기</span></label>
-    <p class="mute" style="font-size:14px;margin:6px 0 0">특정 수업만 금액이 다르면 그 일정을 눌러 "강사료"를 직접 입력하세요. 그 값이 우선 적용돼요.</p>
-    <div class="acts"><span class="sp"></span><button class="btn pri">시급표 저장</button></div></form>`;
+    <p class="mute" style="font-size:14px;margin:6px 0 0">빈칸은 기본 규칙으로 계산돼요: 그외 도서관 120,000 · 학교 주강 100,000 · 학교 보조강 60,000 (회당).<br>특정 수업만 금액이 다르면 그 일정을 눌러 "강사료"를 직접 입력하세요. 그 값이 우선 적용돼요.</p>
+    <div class="acts"><span class="sp"></span><button class="btn pri">강사료표 저장</button></div></form>`;
 }
 
 /* ---------- 9. 설정·데이터 화면 ---------- */
@@ -529,6 +556,7 @@ function renderData() {
     </form>
     <div class="stackv">
       ${rateTable()}
+      ${colorTable()}
       <div class="card"><h2>계정</h2>
         <p style="margin:0 0 12px"><b>${esc(Store.user?.email)}</b> 으로 로그인 중</p>
         <p class="note">데이터는 Supabase에 저장돼요. 휴대폰, 학교 컴퓨터 어디서든 같은 계정으로 로그인하면 똑같이 보여요.</p>
@@ -556,6 +584,11 @@ function renderData() {
     Store.saveProfile({ ...Store.profile(), name: $('#p_name').value.trim(), title: $('#p_title').value.trim(), contact: $('#p_contact').value.trim(), intro: $('#p_intro').value.trim() });
     toast('저장했어요');
   };
+  document.querySelectorAll('[data-color]').forEach(sel => sel.onchange = () => {
+    const colors = { ...(Store.profile().colors || {}) }, v = sel.value;
+    if (v === '') delete colors[sel.dataset.color]; else colors[sel.dataset.color] = v === 'none' ? 'none' : Number(v);
+    Store.saveProfile({ ...Store.profile(), colors }); toast('색을 바꿨어요');
+  });
   $('#rform').onsubmit = e => {
     e.preventDefault();
     const r = {};
@@ -564,7 +597,7 @@ function renderData() {
       if (amount !== '') r[row.dataset.g] = { mode, amount: Number(amount) };
     });
     Store.saveProfile({ ...Store.profile(), rates: r, tax33: $('#r_tax').checked });
-    toast('시급표를 저장했어요');
+    toast('강사료표를 저장했어요');
   };
   if (state.focusRate) { const row = document.querySelector(`#rform [data-g="${CSS.escape(state.focusRate)}"]`); state.focusRate = null; if (row) { row.scrollIntoView({ block: 'center' }); row.querySelector('input').focus(); } }
   $('#imp').onchange = async e => {
@@ -584,10 +617,13 @@ const FORMS = {
   events: { t: '일정', f: [
     ['title', '제목', 'text', { req: 1, ph: '예: 3학년 2반 AI 수업' }],
     ['cat', '분류', 'select', { opts: EV_CATS.filter(c => c.k !== 'pay').map(c => [c.k, c.n]) }],
-    ['time', '시간', 'time'],
+    ['time', '시작 시간', 'time'],
+    ['endTime', '끝 시간', 'time'],
     ['date', '날짜', 'date', { req: 1 }],
     ['end', '끝나는 날 (여러 날일 때)', 'date'],
     ['status', '상태', 'select', { opts: [['진행', '정상 진행'], ...OFF_WORDS.map(w => [w, w])] }],
+    ['role', '역할', 'select', { opts: [['', '해당 없음'], ['주강', '주강'], ['보조강', '보조강']], only: 'class' }],
+    ['color', '블록 색 (이 수업만)', 'select', { opts: [['', '기관 색 그대로'], ['none', '색 없음'], ...PALETTE_NAMES.map((n, i) => [String(i), n])], only: 'class' }],
     ['hours', '인정 시간(시간) — 비우면 자동', 'number', { step: '0.01', min: 0, only: 'class' }],
     ['pay', '강사료(원) — 비우면 시급표로 자동', 'number', { step: '1000', min: 0, only: 'class' }],
     ['memo', '메모', 'textarea']] },
@@ -631,7 +667,7 @@ const DEFAULTS = {
 function field(k, label, type, o = {}, v) {
   const id = 'f_' + k; v = v ?? '';
   const lab = `${esc(label)}${o.req ? ' <b>*</b>' : ''}`;
-  if (type === 'select') return `<label class="fl"><span>${lab}</span><select id="${id}">${o.opts.map(x => { const [val, name] = Array.isArray(x) ? x : [x, x]; return `<option value="${esc(val)}" ${String(v) === String(val) ? 'selected' : ''}>${esc(name)}</option>`; }).join('')}</select></label>`;
+  if (type === 'select') return `<label class="fl" ${o.only ? `data-only="${o.only}"` : ''}><span>${lab}</span><select id="${id}">${o.opts.map(x => { const [val, name] = Array.isArray(x) ? x : [x, x]; return `<option value="${esc(val)}" ${String(v) === String(val) ? 'selected' : ''}>${esc(name)}</option>`; }).join('')}</select></label>`;
   if (type === 'textarea') return `<label class="fl wide"><span>${lab}</span><textarea id="${id}" rows="3" placeholder="${esc(o.ph || '')}">${esc(v)}</textarea></label>`;
   if (type === 'check') return `<label class="ck wide"><input type="checkbox" id="${id}" ${v ? 'checked' : ''}><span>${lab}</span></label>`;
   const attrs = [o.req && 'required', o.ph && `placeholder="${esc(o.ph)}"`, o.list && `list="${o.list}"`, o.step && `step="${o.step}"`,
@@ -650,13 +686,13 @@ function openForm(kind, obj) {
   dlg.showModal();
   if (kind === 'events') {                       // 수업일 때만 시간·강사료 칸 보이기, 자동 계산값을 회색 글씨로 안내
     const sync = () => {
-      const cat = $('#f_cat').value, cur = { ...obj, title: $('#f_title').value, time: $('#f_time').value, status: $('#f_status').value, hours: $('#f_hours').value, pay: '' };
+      const cat = $('#f_cat').value, cur = { ...obj, title: $('#f_title').value, time: $('#f_time').value, endTime: $('#f_endTime').value, role: $('#f_role').value, status: $('#f_status').value, hours: $('#f_hours').value, pay: '' };
       dlg.querySelectorAll('[data-only]').forEach(l => { l.hidden = l.dataset.only !== cat; });
       const ic = incomeOf(cur);
       $('#f_hours').placeholder = `자동: ${hrs(autoHours(cur))}시간`;
-      $('#f_pay').placeholder = ic.autoAmount == null ? `「${ic.g}」 시급 미입력` : `자동: ${ic.autoAmount.toLocaleString('ko-KR')}원`;
+      $('#f_pay').placeholder = ic.autoAmount == null ? `「${ic.g}」 금액 미입력 (설정 → 시급표)` : `자동: ${ic.autoAmount.toLocaleString('ko-KR')}원 (${ic.rule ? '기본 규칙' : '시급표'} · ${ic.g})`;
     };
-    ['#f_cat', '#f_title', '#f_time', '#f_hours', '#f_status'].forEach(sel => $(sel).addEventListener('input', sync));
+    ['#f_cat', '#f_title', '#f_time', '#f_endTime', '#f_role', '#f_hours', '#f_status'].forEach(sel => $(sel).addEventListener('input', sync));
     $('#f_cat').addEventListener('change', sync); sync();
   }
   $('#fm').onsubmit = e => {
@@ -667,6 +703,7 @@ function openForm(kind, obj) {
       out[k] = t === 'check' ? el.checked : t === 'number' ? (el.value === '' ? '' : Number(el.value)) : el.value.trim();
     });
     if (out.end && out.end < (out.date || out.start)) out.end = '';
+    if (kind === 'events' && out.color !== '' && out.color !== 'none' && out.color != null) out.color = Number(out.color);
     if (out.link && !safeUrl(out.link)) { toast('링크는 https://로 시작해야 해요'); return; }
     Store.save(kind, out); dlg.close(); toast('저장했어요');
   };

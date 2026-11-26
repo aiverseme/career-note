@@ -63,7 +63,7 @@ textarea{resize:vertical}
 
 /* ---------- 4. 일정 목록 한 줄 (시간이 왼쪽에 크게 걸림) ---------- */
 .list{list-style:none;margin:0;padding:0}
-.it{display:grid;grid-template-columns:5.2em auto minmax(0,1fr) auto;align-items:center;gap:10px;padding:11px 4px;border-top:1px solid var(--line);cursor:pointer}
+.it{display:grid;grid-template-columns:6.6em auto minmax(0,1fr) auto;align-items:center;gap:10px;padding:11px 4px;border-top:1px solid var(--line);cursor:pointer}
 .it:first-child{border-top:0}
 .it:hover{background:var(--soft)}
 .it .tm{font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
@@ -99,6 +99,7 @@ textarea{resize:vertical}
 .spanbar{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:4px 8px;border-radius:6px;background:#bfeef0;color:#0b4a52;font-size:12.5px;text-align:center;cursor:pointer;font-weight:500}
 .gc{display:block;border-radius:6px;padding:4px 5px;background:var(--bg);color:var(--fg);text-align:center;cursor:pointer;font-size:12.5px;overflow-wrap:anywhere}
 .gc small{display:block;font-size:12px;opacity:.85;font-variant-numeric:tabular-nums}
+.gc.plain{border:1px solid var(--line)}
 .gc.hot{--bg:#fde2df;--fg:#8a1d10}
 .gl{display:block;cursor:pointer;font-size:12.5px;padding:1px 3px;border-radius:4px;overflow-wrap:anywhere}
 .gl b{font-weight:600;font-variant-numeric:tabular-nums}
@@ -165,6 +166,8 @@ tr.off td{text-decoration:line-through;opacity:.5}
 .rate{display:grid;grid-template-columns:minmax(0,1fr) 5.5em 9em;gap:8px;align-items:center;padding:6px 0;border-top:1px solid var(--line)}
 .rate:first-child{border-top:0}
 .rate select,.rate input{min-height:40px;padding:6px 8px}
+.rate.crow{grid-template-columns:22px minmax(0,1fr) 8em}
+.sw{width:20px;height:20px;border-radius:5px}
 @media (max-width:600px){.rate{grid-template-columns:minmax(0,1fr) 5em 7.5em}}
 
 /* ---------- 9. 팝업 입력창 ---------- */
