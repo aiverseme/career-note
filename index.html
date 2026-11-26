@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <!-- ① 문서 기본 정보: 글자 인코딩, 휴대폰 화면 맞춤, 탭 제목 -->
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>커리어 노트</title>
+
+  <!-- ② 글꼴과 디자인(CSS) 불러오기 -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!-- ③ 상단 메뉴: 각 링크의 #이름이 화면 이름이 됩니다 -->
+  <header class="top">
+    <a class="brand" href="#today">커리어 노트</a>
+    <nav class="nav scroll" aria-label="주요 메뉴">
+      <a href="#today">오늘</a>
+      <a href="#schedule">일정</a>
+      <a href="#career">커리어</a>
+      <a href="#money">가계부</a>
+      <a href="#data">설정</a>
+    </nav>
+  </header>
+
+  <!-- ④ 화면들: 한 번에 하나만 보입니다. 내용은 app.js가 채웁니다 -->
+  <main>
+    <section class="view" id="v-today"></section>
+    <section class="view" id="v-schedule" hidden></section>
+    <section class="view" id="v-career" hidden></section>
+    <section class="view" id="v-money" hidden></section>
+    <section class="view" id="v-data" hidden></section>
+  </main>
+
+  <!-- ⑤ 입력 창(팝업)과 확인 창, 알림 -->
+  <dialog id="dlg"></dialog>
+  <dialog id="ask">
+    <form method="dialog">
+      <p id="askMsg"></p>
+      <div class="acts"><span class="sp"></span>
+        <button value="no" class="btn ghost">취소</button>
+        <button value="ok" class="btn pri danger">확인</button>
+      </div>
+    </form>
+  </dialog>
+  <dialog id="copyDlg">
+    <form method="dialog">
+      <h2>아래 내용을 복사해 쓰세요</h2>
+      <textarea id="copyArea" rows="12" readonly></textarea>
+      <div class="acts"><span class="sp"></span><button class="btn pri">닫기</button></div>
+    </form>
+  </dialog>
+  <div id="toast" role="status" aria-live="polite"></div>
+
+  <!-- ⑥ 동작(JavaScript): 저장 담당 → 화면 담당 순서로 불러옵니다 -->
+  <script src="js/store.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

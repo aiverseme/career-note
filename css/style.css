@@ -1,0 +1,198 @@
+/* VOICE: 매일 여는 차분한 업무 수첩 — 군더더기 없이, 빨리 찾고 빨리 적기
+   IDEA: 교사의 업무 수첩. 인덱스 탭 메뉴, 줄 그은 칸, 왼쪽에 걸린 큰 시간·날짜
+   PICTURE: 각 화면의 주인공은 작업 그 자체 — 달력 칸, 이력 표, 지출 막대
+   COLOUR+TYPE: 종이색 바탕·먹색 글씨·칠판 초록 강조 / IBM Plex Sans KR
+   LAYOUT: 상단 탭 → 넓은 화면 2단 → 휴대폰 1단 */
+
+/* ---------- 1. 색과 글꼴 변수: 여기만 바꾸면 전체 색이 바뀝니다 ---------- */
+:root{color-scheme:light dark;
+  --bg:light-dark(#f4f2ec,#131517);--panel:light-dark(#fff,#1b1e21);
+  --ink:light-dark(#1c2025,#e8e6e1);--mute:light-dark(#686c72,#9b9fa5);
+  --line:light-dark(#e2ded4,#2b2f33);--acc:light-dark(#1f5e46,#72c7a1);
+  --acc-ink:light-dark(#fff,#0d1913);--soft:light-dark(#e7f0eb,#1b2a23);
+  --danger:light-dark(#c8371e,#f07a62);--radius:12px}
+:root[data-theme=light]{color-scheme:light}
+:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+html{scroll-padding-top:72px}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 "IBM Plex Sans KR",system-ui,sans-serif;overflow-x:clip;word-break:keep-all}
+h1,h2,h3{margin:0;line-height:1.2;text-wrap:balance}
+button,input,select,textarea{font:inherit;color:inherit}
+.scroll{overflow-x:auto}
+
+/* ---------- 2. 상단 탭 메뉴 ---------- */
+.top{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:20px;padding:10px max(4vw,16px) 0;background:var(--bg);border-bottom:2px solid var(--ink)}
+.brand{font-weight:700;font-size:19px;color:var(--ink);text-decoration:none;padding-bottom:10px;white-space:nowrap}
+.nav{display:flex;gap:4px;margin-left:auto}
+.nav a{flex:none;padding:9px 14px 10px;border-radius:10px 10px 0 0;color:var(--mute);text-decoration:none;font-weight:500;white-space:nowrap}
+.nav a:hover{color:var(--ink)}
+.nav a[aria-current=page]{background:var(--ink);color:var(--bg)}
+main{max-width:1240px;margin:0 auto;padding:clamp(20px,3vw,40px) max(4vw,16px) 80px}
+
+/* ---------- 3. 공통 부품: 제목줄, 카드, 버튼, 입력칸 ---------- */
+.head{display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px 16px;margin-bottom:22px}
+.head h1{font-size:clamp(28px,4vw,44px);font-weight:700;letter-spacing:-.02em}
+.head .sub{color:var(--mute);margin-top:6px}
+.head .tools{margin-left:auto;display:flex;flex-wrap:wrap;gap:8px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px}
+.card>h2{font-size:17px;font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.card>h2 .n{color:var(--mute);font-weight:400;font-size:14px}
+.grid2{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:18px;align-items:start}
+.stackv{display:grid;gap:18px}
+.btn{min-height:44px;padding:0 16px;border-radius:10px;border:1px solid var(--line);background:var(--panel);cursor:pointer;font-weight:500;white-space:nowrap}
+.btn:hover{border-color:var(--ink)}
+a.btn{color:var(--ink)}
+.btn.pri{background:var(--acc);border-color:var(--acc);color:var(--acc-ink)}
+.btn.ghost{background:transparent}
+.btn.danger.pri{background:var(--danger);border-color:var(--danger);color:#fff}
+.btn.ghost.danger{color:var(--danger)}
+.btn.sm{min-height:36px;padding:0 12px;font-size:14px}
+:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+input,select,textarea{width:100%;min-height:44px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--panel);font-size:16px}
+textarea{resize:vertical}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--panel)}
+.seg button{min-height:40px;padding:0 14px;border:0;background:none;cursor:pointer;color:var(--mute);font-weight:500;white-space:nowrap}
+.seg button[aria-pressed=true]{background:var(--ink);color:var(--bg)}
+.empty{color:var(--mute);padding:14px 0;font-size:15px}
+.empty .btn{margin-top:10px}
+.tag{display:inline-block;padding:1px 8px;border-radius:6px;font-size:13px;font-weight:500;white-space:nowrap;background:color-mix(in srgb,var(--c,var(--acc)) 15%,transparent);color:color-mix(in srgb,var(--c,var(--acc)) 80%,var(--ink))}
+.mute{color:var(--mute)}
+.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+
+/* ---------- 4. 일정 목록 한 줄 (시간이 왼쪽에 크게 걸림) ---------- */
+.list{list-style:none;margin:0;padding:0}
+.it{display:grid;grid-template-columns:5.2em auto minmax(0,1fr) auto;align-items:center;gap:10px;padding:11px 4px;border-top:1px solid var(--line);cursor:pointer}
+.it:first-child{border-top:0}
+.it:hover{background:var(--soft)}
+.it .tm{font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+.it .tt{overflow-wrap:anywhere}
+.it .tt.done{text-decoration:line-through;color:var(--mute)}
+.it input[type=checkbox]{width:22px;height:22px;min-height:0;accent-color:var(--acc);cursor:pointer}
+
+/* ---------- 5. 오늘 화면 ---------- */
+.today-date{font-size:clamp(34px,5vw,52px);font-weight:700;letter-spacing:-.03em;line-height:1.05}
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.stat{padding:12px 0;border-top:2px solid var(--ink)}
+.stat b{display:block;font-size:clamp(24px,3vw,32px);font-weight:700;font-variant-numeric:tabular-nums;line-height:1.1}
+.stat span{color:var(--mute);font-size:14px}
+
+/* ---------- 6. 달력 ---------- */
+.filters{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+.filters button{min-height:36px;padding:0 12px;border-radius:999px;border:1px solid var(--line);background:var(--panel);cursor:pointer;font-size:14px;display:inline-flex;align-items:center;gap:6px}
+.filters button::before{content:"";width:9px;height:9px;border-radius:50%;background:var(--c)}
+.filters button[aria-pressed=false]{opacity:.45;text-decoration:line-through}
+.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));border-top:2px solid var(--ink);border-left:1px solid var(--line);background:var(--panel)}
+.cal .wd{padding:8px;font-size:13px;font-weight:600;color:var(--mute);border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
+.day{display:flex;flex-direction:column;gap:3px;align-items:stretch;min-height:104px;padding:6px;border:0;border-right:1px solid var(--line);border-bottom:1px solid var(--line);background:none;text-align:left;cursor:pointer;overflow:hidden}
+.day:hover{background:var(--soft)}
+.day .dn{font-weight:600;font-size:14px;font-variant-numeric:tabular-nums;width:26px;height:26px;display:grid;place-items:center;border-radius:50%}
+.day.out{background:color-mix(in srgb,var(--bg) 60%,transparent)}
+.day.out .dn{color:var(--mute);font-weight:400}
+.day.sun .dn{color:var(--danger)}
+.day.now .dn{background:var(--acc);color:var(--acc-ink)}
+.day.sel{box-shadow:inset 0 0 0 2px var(--ink)}
+.chip{display:block;font-size:12px;line-height:1.35;padding:2px 6px;border-radius:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:color-mix(in srgb,var(--c) 16%,transparent);border-left:3px solid var(--c)}
+.chip.done{opacity:.5;text-decoration:line-through}
+.more{font-size:12px;color:var(--mute);padding-left:4px}
+.calbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:12px}
+.calbar h2{font-size:22px;font-weight:700;min-width:8.5em}
+
+/* ---------- 7. 커리어: 목록, 이력서, 포트폴리오 ---------- */
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;align-items:center}
+.toolbar input[type=search]{flex:1 1 220px;width:auto}
+.toolbar select{width:auto;flex:0 1 auto}
+.rec{display:grid;grid-template-columns:8.5em minmax(0,1fr) auto;gap:4px 16px;padding:14px 4px;border-top:1px solid var(--line);cursor:pointer}
+.rec:hover{background:var(--soft)}
+.rec .when{font-variant-numeric:tabular-nums;font-weight:600;font-size:14px;white-space:nowrap}
+.rec .what b{font-weight:600}
+.rec .meta{color:var(--mute);font-size:14px}
+.rec .side{text-align:right;font-size:14px}
+.star{color:#d39a1c}
+.resume{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:clamp(22px,4vw,48px)}
+.resume .rh{border-bottom:2px solid var(--ink);padding-bottom:16px;margin-bottom:6px}
+.resume .rh h2{font-size:clamp(28px,4vw,38px);font-weight:700}
+.resume .rh p{margin:6px 0 0;color:var(--mute)}
+.resume .sum{display:flex;flex-wrap:wrap;gap:6px 22px;padding:12px 0;font-size:15px}
+.resume .sum b{font-variant-numeric:tabular-nums}
+.resume h3{font-size:18px;font-weight:700;margin:26px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--ink)}
+table{width:100%;border-collapse:collapse;font-size:15px}
+th{text-align:left;font-weight:600;color:var(--mute);font-size:13px;padding:6px 8px;border-bottom:1px solid var(--line)}
+td{padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+td.r,th.r{text-align:right}
+.yr{font-weight:700;color:var(--acc)}
+.groups{display:grid;gap:26px}
+.group h3{font-size:20px;font-weight:700;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px;margin-bottom:10px}
+.group h3 span{font-size:14px;font-weight:400;color:var(--mute)}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+.pf{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;cursor:pointer;display:flex;flex-direction:column;gap:6px}
+.pf:hover{border-color:var(--ink)}
+.pf .pd{font-size:13px;color:var(--mute);font-variant-numeric:tabular-nums}
+.pf h4{margin:0;font-size:17px;line-height:1.3}
+.pf p{margin:0;font-size:14px}
+.pf .kw{display:flex;flex-wrap:wrap;gap:4px;margin-top:auto;padding-top:6px}
+.pf a{color:var(--acc);font-size:14px;overflow-wrap:anywhere}
+
+/* ---------- 8. 가계부 ---------- */
+.bars{display:grid;gap:9px}
+.bar{display:grid;grid-template-columns:7.5em minmax(0,1fr) 7em;gap:10px;align-items:center;font-size:14px}
+.bar .tr{height:12px;background:var(--soft);border-radius:6px;overflow:hidden}
+.bar .tr i{display:block;height:100%;background:var(--acc);border-radius:6px}
+.bar .v{text-align:right;font-variant-numeric:tabular-nums}
+.pay{display:grid;grid-template-columns:3.6em minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:10px 2px;border-top:1px solid var(--line)}
+.pay:first-child{border-top:0}
+.pay .d{font-weight:700;font-variant-numeric:tabular-nums}
+.pay .nm{cursor:pointer}
+.pay.off{opacity:.5}
+tbody tr{cursor:pointer}
+tbody tr:hover{background:var(--soft)}
+
+/* ---------- 9. 팝업 입력창 ---------- */
+dialog{border:0;border-radius:16px;padding:0;background:var(--panel);color:var(--ink);width:min(620px,calc(100vw - 24px));max-height:calc(100dvh - 24px);box-shadow:0 20px 60px rgb(0 0 0/.3)}
+dialog::backdrop{background:rgb(15 18 20/.45)}
+dialog form{padding:22px clamp(18px,3vw,28px)}
+dialog h2{font-size:21px;margin-bottom:16px}
+.fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 14px}
+.fl{display:grid;gap:5px;font-size:14px;font-weight:500}
+.fl b{color:var(--danger)}
+.wide{grid-column:1/-1}
+.ck{display:flex;align-items:center;gap:10px;font-size:15px;cursor:pointer;min-height:36px}
+.ck input{width:22px;height:22px;min-height:0;accent-color:var(--acc)}
+.acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:20px}
+.acts .sp{flex:1}
+#ask{width:min(420px,calc(100vw - 24px))}
+#ask p{margin:0;font-size:17px}
+#toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,20px);background:var(--ink);color:var(--bg);padding:11px 18px;border-radius:10px;opacity:0;pointer-events:none;transition:.25s;z-index:20;white-space:nowrap}
+#toast.on{opacity:1;transform:translate(-50%,0)}
+.note{font-size:14px;color:var(--mute);background:var(--soft);border-radius:10px;padding:12px 14px;margin:0 0 16px}
+.note.warn{background:color-mix(in srgb,var(--danger) 12%,transparent);color:var(--ink)}
+
+/* ---------- 10. 좁은 화면(휴대폰) ---------- */
+@media (max-width:900px){.grid2{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:600px){
+  .top{flex-wrap:wrap;gap:0}
+  .nav{margin-left:0;width:100%}
+  .day{min-height:58px;padding:4px}
+  .chip{font-size:0;padding:0;height:6px;border-left:0;background:var(--c);border-radius:3px}
+  .more{font-size:11px;padding:0}
+  .cal .wd{padding:6px 4px;text-align:center}
+  .rec{grid-template-columns:minmax(0,1fr)}
+  .rec .side{text-align:left}
+  .fields{grid-template-columns:minmax(0,1fr)}
+  .bar{grid-template-columns:5.5em minmax(0,1fr) 6em}
+  .stats{gap:8px}
+  table{font-size:13px}
+  .stack thead{display:none}
+  .stack tr{display:grid;padding-block:10px;border-bottom:1px solid var(--line)}
+  .stack td{display:flow-root;border:0;padding:3px 0;padding-inline-start:6em;text-align:start}
+  .stack td::before{content:attr(data-l);float:inline-start;width:5.5em;margin-inline-start:-6em;color:var(--mute)}
+  .stack td:empty{display:none}
+}
+@media (prefers-reduced-motion:reduce){#toast{transition:none}}
+
+/* ---------- 11. 인쇄(이력서만 깔끔하게) ---------- */
+@media print{
+  .top,.head .tools,.toolbar,.seg,#toast,.noprint{display:none!important}
+  body{background:#fff;color:#000}
+  main{padding:0;max-width:none}
+  .resume{border:0;padding:0}
+}
