@@ -39,13 +39,17 @@ const Store = (() => {
   // 내 데이터 전부 불러오기
   async function load() {
     if (!user) return;
-    const [rec, prof] = await Promise.all([
-      sb.from('records').select('id, kind, data').limit(10000),
-      sb.from('profiles').select('data').maybeSingle()
-    ]);
-    if (rec.error) { fail('데이터를 불러오지 못했어요.'); return; }
+    // Supabase는 한 번에 1,000줄까지만 보내 줘서, 1,000줄씩 나눠 받아요
+    const rows = [];
+    for (let from = 0; ; from += 1000) {
+      const { data: part, error } = await sb.from('records').select('id, kind, data').order('id').range(from, from + 999);
+      if (error) { fail('데이터를 불러오지 못했어요.'); return; }
+      rows.push(...part);
+      if (part.length < 1000) break;
+    }
+    const prof = await sb.from('profiles').select('data').maybeSingle();
     KINDS.forEach(k => { data[k] = []; });
-    rec.data.forEach(r => { if (data[r.kind]) data[r.kind].push({ ...r.data, id: r.id }); });
+    rows.forEach(r => { if (data[r.kind]) data[r.kind].push({ ...r.data, id: r.id }); });
     data.profile = prof.data?.data || {};
     lastLoad = Date.now();
     notify();
