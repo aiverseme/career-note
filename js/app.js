@@ -171,6 +171,7 @@ function renderToday() {
         ${ongoing.length ? `<h2 style="margin-top:16px">진행 중</h2><ul class="list">${ongoing.map(c => `<li class="it" data-open="careers" data-id="${esc(c.id)}"><span class="tm">~${esc(md(c.end || c.start))}</span><span class="tag">${esc(kindOf(c.kind).n)}</span><span class="tt">${esc(c.title)}</span><span></span></li>`).join('')}</ul>` : ''}
         <p style="margin:14px 0 0"><a href="#career" class="btn sm" style="display:inline-flex;align-items:center;text-decoration:none">커리어 전체 보기</a></p>
       </div>
+      <div class="card"><h2>${d.getMonth() + 1}월 강의 수입</h2>${(() => { const inc = monthIncome(t.slice(0, 7)); return `<div class="stats" style="grid-template-columns:repeat(2,minmax(0,1fr))"><div class="stat"><b class="num">${inc.total.toLocaleString('ko-KR')}</b><span>원 · ${inc.live.length}회</span></div>${Store.profile().tax33 ? `<div class="stat"><b class="num">${net33(inc.total).toLocaleString('ko-KR')}</b><span>3.3% 공제 후</span></div>` : ''}</div>${inc.noRate ? `<p class="mute" style="font-size:14px;margin:10px 0 0">시급 미입력 ${inc.noRate}회 · <a href="#data">시급표 입력</a></p>` : ''}<p style="margin:12px 0 0"><a href="#money" class="btn sm" style="display:inline-flex;align-items:center;text-decoration:none">수입·지출 보기</a></p>`; })()}</div>
       <div class="card"><h2>결제 예정 <span class="n">10일 이내</span></h2>${listOr(pays, '다가오는 정기 결제가 없어요.', true)}</div>
     </div>
   </div>`;
@@ -247,7 +248,7 @@ function weekBlock(start, month, colors) {
     spans.forEach((i, si) => {                          // 여러 날 일정은 가로 막대로
       const rr = row + si, a = Math.max(0, ds.indexOf(i.start) < 0 ? 0 : ds.indexOf(i.start)), b = ds.indexOf(i.end) < 0 ? 6 : ds.indexOf(i.end);
       for (let k = 0; k < 7; k++) if (k < a || k > b) h += cell(k, rr, '', ' thin');
-      h += `<div class="wsp" style="grid-row:${rr};grid-column:${a + 2}/${b + 3}"><span class="bar ${isOff(i) ? 'off' : ''}" title="${esc(i.title)}" data-open="${i.src}" data-id="${esc(i.id)}">${esc(i.title)}</span></div>`;
+      h += `<div class="wsp" style="grid-row:${rr};grid-column:${a + 2}/${b + 3}"><span class="spanbar ${isOff(i) ? 'off' : ''}" title="${esc(i.title)}" data-open="${i.src}" data-id="${esc(i.id)}">${esc(i.title)}</span></div>`;
     });
     const rr = row + spans.length;
     for (let k = 0; k < 7; k++) {
@@ -396,7 +397,38 @@ function portfolio(list) {
       </div>`).join('')}</div></section>`).join('')}</div>`;
 }
 
-/* ---------- 8. 가계부 화면 ---------- */
+/* ---------- 8-1. 강의 수입 계산 ---------- */
+// 수업 그룹: 제목 첫 단어(기관) + 주강/보조강 구분. 시급표는 이 이름으로 저장돼요.
+const groupOf = t => { const k = keyOf(t), r = /보조강/.test(t) ? ' · 보조강' : /주강/.test(t) ? ' · 주강' : ''; return k + r; };
+const toMin = hm => { const [h, m] = hm.split(':').map(Number); return h * 60 + m; };
+// 수업 시간(시간 단위): 제목 속 "09:20-10:20" 같은 구간을 모두 더하고, 없으면 시작 시간 ~ 끝 시간
+function autoHours(e) {
+  const ranges = [...String(e.title || '').matchAll(/(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})/g)];
+  let min = ranges.reduce((s, r) => s + Math.max(0, toMin(r[2]) - toMin(r[1])), 0);
+  if (!min && e.time && endOf(e.title)) min = Math.max(0, toMin(endOf(e.title)) - toMin(e.time));
+  return Math.round(min / 60 * 100) / 100;
+}
+const rates = () => Store.profile().rates || {};
+// 수업 한 건의 수입: 수동 금액 > (시급 × 시간 또는 회당 금액)
+function incomeOf(e) {
+  const g = groupOf(e.title), r = rates()[g] || {}, hours = e.hours !== '' && e.hours != null ? Number(e.hours) : autoHours(e);
+  const off = isOff({ title: e.title, status: e.status });
+  const auto = !r.amount ? null : r.mode === 'session' ? Number(r.amount) : Math.round(Number(r.amount) * hours);
+  const manual = e.pay !== '' && e.pay != null;
+  return { g, hours, off, manual, noRate: !manual && auto == null, amount: off ? 0 : manual ? Number(e.pay) : (auto || 0), autoAmount: auto };
+}
+function monthIncome(mon) {
+  const rows = Store.list('events').filter(e => e.cat === 'class' && (e.date || '').startsWith(mon)).map(e => ({ e, ...incomeOf(e) }));
+  const live = rows.filter(r => !r.off);
+  const total = live.reduce((s, r) => s + r.amount, 0);
+  const groups = {};
+  live.forEach(r => { const g = groups[r.g] ||= { n: 0, hours: 0, amount: 0, noRate: 0 }; g.n++; g.hours += r.hours; g.amount += r.amount; if (r.noRate) g.noRate++; });
+  return { rows, live, total, groups, noRate: live.filter(r => r.noRate).length };
+}
+const net33 = n => Math.round(n * 0.967);
+const hrs = h => (Math.round(h * 100) / 100).toString();
+
+/* ---------- 8. 수입·지출 화면 ---------- */
 function renderMoney() {
   const { mY: y, mM: m } = state, mon = `${y}-${pad(m + 1)}`;
   const ex = Store.list('expenses').filter(x => (x.date || '').startsWith(mon)).sort((a, b) => b.date.localeCompare(a.date));
@@ -408,14 +440,33 @@ function renderMoney() {
   const payTotal = active.reduce((s, p) => s + (Number(p.amount) || 0), 0);
   const paidN = active.filter(p => isPaid(p.id, mon)).length;
 
+  const inc = monthIncome(mon), tax = !!Store.profile().tax33;
+  const gl = Object.entries(inc.groups).sort((a, b) => b[1].amount - a[1].amount);
   $('#v-money').innerHTML = `
-  <div class="head"><div><h1>가계부</h1><div class="sub">지출 기록과 매달 나가는 정기 결제</div></div>
+  <div class="head"><div><h1>수입 · 지출</h1><div class="sub">수업 시급으로 계산한 강의 수입과 지출 기록</div></div>
     <div class="tools"><button class="btn pri" data-act="add" data-kind="expenses">+ 지출 입력</button>
     <button class="btn" data-act="add" data-kind="payments">+ 정기 결제 등록</button></div></div>
   <div class="calbar"><h2>${y}년 ${m + 1}월</h2>
     <button class="btn sm" data-act="mmonth" data-d="-1" aria-label="이전 달">‹</button>
     <button class="btn sm" data-act="mmonth" data-d="0">이번 달</button>
     <button class="btn sm" data-act="mmonth" data-d="1" aria-label="다음 달">›</button></div>
+  <div class="card income">
+    <div class="stats">
+      <div class="stat"><b class="num">${inc.total.toLocaleString('ko-KR')}</b><span>강의 수입(원) · ${inc.live.length}회</span></div>
+      ${tax ? `<div class="stat"><b class="num">${net33(inc.total).toLocaleString('ko-KR')}</b><span>3.3% 공제 후(원)</span></div>` : ''}
+      <div class="stat"><b class="num">${total.toLocaleString('ko-KR')}</b><span>지출(원)</span></div>
+      <div class="stat"><b class="num ${(tax ? net33(inc.total) : inc.total) - total < 0 ? 'neg' : ''}">${((tax ? net33(inc.total) : inc.total) - total).toLocaleString('ko-KR')}</b><span>수입 − 지출(원)</span></div>
+    </div>
+    ${inc.noRate ? `<p class="note warn" style="margin:14px 0 0">시급이 입력되지 않은 수업이 ${inc.noRate}회 있어요. <a href="#data">설정 → 수업별 시급표</a>에서 입력하면 자동 계산돼요.</p>` : ''}
+    <h2 style="margin-top:18px">기관별 강의 수입</h2>
+    ${gl.length ? `<table class="stack"><thead><tr><th>수업 그룹</th><th class="r">횟수</th><th class="r">시간</th><th class="r">금액</th></tr></thead><tbody>
+      ${gl.map(([g, v]) => `<tr data-act="rate" data-g="${esc(g)}"><td>${esc(g)}${v.noRate ? ' <span class="tag" style="--c:#c8371e">시급 미입력</span>' : ''}</td><td class="r num">${v.n}</td><td class="r num">${hrs(v.hours)}</td><td class="r num">${won(v.amount)}</td></tr>`).join('')}
+      </tbody></table>` : '<p class="empty">이 달에 진행한 수업이 없어요.</p>'}
+    <details style="margin-top:14px"><summary>수업별 내역 보기 (${inc.rows.length}건)</summary>
+      <table class="stack" style="margin-top:8px"><thead><tr><th>날짜</th><th>수업</th><th class="r">시간</th><th class="r">금액</th></tr></thead><tbody>
+      ${inc.rows.sort((a, b) => (a.e.date + (a.e.time || '')).localeCompare(b.e.date + (b.e.time || ''))).map(r => `<tr data-open="events" data-id="${esc(r.e.id)}" class="${r.off ? 'off' : ''}"><td class="num">${esc(md(r.e.date))}</td><td>${esc(cleanTitle(r.e.title))}${r.manual ? ' <span class="tag">수동</span>' : ''}${r.off ? ` <span class="tag" style="--c:#888">${esc(r.e.status || '제외')}</span>` : ''}</td><td class="r num">${hrs(r.hours)}</td><td class="r num">${r.off ? '-' : r.noRate ? '시급 미입력' : won(r.amount)}</td></tr>`).join('')}
+      </tbody></table></details>
+  </div>
   <div class="grid2">
     <div class="stackv">
       <div class="card"><div class="stats">
@@ -442,12 +493,27 @@ function renderMoney() {
   </div>`;
 }
 
+function rateTable() {
+  const cnt = {};
+  Store.list('events').filter(e => e.cat === 'class').forEach(e => { const g = groupOf(e.title); if (g) cnt[g] = (cnt[g] || 0) + 1; });
+  const r = rates(); Object.keys(r).forEach(g => { cnt[g] ||= 0; });
+  const list = Object.entries(cnt).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  return `<form class="card" id="rform"><h2>수업별 시급표 <span class="n">한 번 넣으면 같은 그룹 수업에 자동 적용</span></h2>
+    ${list.length ? `<div class="rates">${list.map(([g, n]) => `<div class="rate" data-g="${esc(g)}">
+      <span><b>${esc(g)}</b><br><span class="mute">수업 ${n}회</span></span>
+      <select aria-label="${esc(g)} 지급 방식"><option value="hour" ${r[g]?.mode !== 'session' ? 'selected' : ''}>시급</option><option value="session" ${r[g]?.mode === 'session' ? 'selected' : ''}>회당</option></select>
+      <input type="number" inputmode="numeric" min="0" step="1000" placeholder="금액(원)" value="${r[g]?.amount ?? ''}" aria-label="${esc(g)} 금액"></div>`).join('')}</div>` : '<p class="empty">수업 일정을 입력하면 기관별로 여기에 나타나요.</p>'}
+    <label class="ck" style="margin-top:10px"><input type="checkbox" id="r_tax" ${Store.profile().tax33 ? 'checked' : ''}><span>수입 화면에 3.3% 원천징수 후 금액도 보기</span></label>
+    <p class="mute" style="font-size:14px;margin:6px 0 0">특정 수업만 금액이 다르면 그 일정을 눌러 "강사료"를 직접 입력하세요. 그 값이 우선 적용돼요.</p>
+    <div class="acts"><span class="sp"></span><button class="btn pri">시급표 저장</button></div></form>`;
+}
+
 /* ---------- 9. 설정·데이터 화면 ---------- */
 function renderData() {
   const p = Store.profile(), n = Store.count(), legacy = Store.legacy();
   const hasSample = ['events', 'careers', 'expenses', 'payments'].some(k => Store.list(k).some(x => x.sample));
   $('#v-data').innerHTML = `
-  <div class="head"><div><h1>설정 · 데이터</h1><div class="sub">이력서 머리글과 데이터 보관</div></div></div>
+  <div class="head"><div><h1>설정 · 데이터</h1><div class="sub">수업별 시급, 이력서 머리글, 데이터 보관</div></div></div>
   ${legacy ? `<p class="note">이 브라우저에 1단계 때 입력한 기록 ${legacy.n}건이 남아 있어요.
     <button class="btn sm pri" data-act="legacy" style="margin-left:8px">내 계정으로 옮기기</button>
     <button class="btn sm ghost" data-act="legacyNo">무시하기</button></p>` : ''}
@@ -462,6 +528,7 @@ function renderData() {
       <div class="acts"><span class="sp"></span><button class="btn pri">저장</button></div>
     </form>
     <div class="stackv">
+      ${rateTable()}
       <div class="card"><h2>계정</h2>
         <p style="margin:0 0 12px"><b>${esc(Store.user?.email)}</b> 으로 로그인 중</p>
         <p class="note">데이터는 Supabase에 저장돼요. 휴대폰, 학교 컴퓨터 어디서든 같은 계정으로 로그인하면 똑같이 보여요.</p>
@@ -486,9 +553,20 @@ function renderData() {
   </div>`;
   $('#pform').onsubmit = e => {
     e.preventDefault();
-    Store.saveProfile({ name: $('#p_name').value.trim(), title: $('#p_title').value.trim(), contact: $('#p_contact').value.trim(), intro: $('#p_intro').value.trim() });
+    Store.saveProfile({ ...Store.profile(), name: $('#p_name').value.trim(), title: $('#p_title').value.trim(), contact: $('#p_contact').value.trim(), intro: $('#p_intro').value.trim() });
     toast('저장했어요');
   };
+  $('#rform').onsubmit = e => {
+    e.preventDefault();
+    const r = {};
+    document.querySelectorAll('#rform [data-g]').forEach(row => {
+      const amount = row.querySelector('input').value, mode = row.querySelector('select').value;
+      if (amount !== '') r[row.dataset.g] = { mode, amount: Number(amount) };
+    });
+    Store.saveProfile({ ...Store.profile(), rates: r, tax33: $('#r_tax').checked });
+    toast('시급표를 저장했어요');
+  };
+  if (state.focusRate) { const row = document.querySelector(`#rform [data-g="${CSS.escape(state.focusRate)}"]`); state.focusRate = null; if (row) { row.scrollIntoView({ block: 'center' }); row.querySelector('input').focus(); } }
   $('#imp').onchange = async e => {
     const f = e.target.files[0]; if (!f) return;
     try {
@@ -510,6 +588,8 @@ const FORMS = {
     ['date', '날짜', 'date', { req: 1 }],
     ['end', '끝나는 날 (여러 날일 때)', 'date'],
     ['status', '상태', 'select', { opts: [['진행', '정상 진행'], ...OFF_WORDS.map(w => [w, w])] }],
+    ['hours', '인정 시간(시간) — 비우면 자동', 'number', { step: '0.01', min: 0, only: 'class' }],
+    ['pay', '강사료(원) — 비우면 시급표로 자동', 'number', { step: '1000', min: 0, only: 'class' }],
     ['memo', '메모', 'textarea']] },
   careers: { t: '커리어 기록', f: [
     ['kind', '구분', 'select', { opts: CAREER_KINDS.map(c => [c.k, c.n]) }],
@@ -556,7 +636,7 @@ function field(k, label, type, o = {}, v) {
   if (type === 'check') return `<label class="ck wide"><input type="checkbox" id="${id}" ${v ? 'checked' : ''}><span>${lab}</span></label>`;
   const attrs = [o.req && 'required', o.ph && `placeholder="${esc(o.ph)}"`, o.list && `list="${o.list}"`, o.step && `step="${o.step}"`,
     o.min != null && `min="${o.min}"`, o.max != null && `max="${o.max}"`, type === 'number' && 'inputmode="decimal"'].filter(Boolean).join(' ');
-  return `<label class="fl ${type === 'text' || type === 'url' ? 'wide' : ''}"><span>${lab}</span><input id="${id}" type="${type}" value="${esc(v)}" ${attrs}></label>`;
+  return `<label class="fl ${type === 'text' || type === 'url' ? 'wide' : ''}" ${o.only ? `data-only="${o.only}"` : ''}><span>${lab}</span><input id="${id}" type="${type}" value="${esc(v)}" ${attrs}></label>`;
 }
 function openForm(kind, obj) {
   const F = FORMS[kind], isNew = !obj.id, dlg = $('#dlg');
@@ -568,6 +648,17 @@ function openForm(kind, obj) {
     <div class="acts">${isNew ? '' : '<button type="button" class="btn ghost danger" id="fdel">삭제</button>'}<span class="sp"></span>
       <button type="button" class="btn ghost" id="fclose">취소</button><button class="btn pri">저장</button></div></form>`;
   dlg.showModal();
+  if (kind === 'events') {                       // 수업일 때만 시간·강사료 칸 보이기, 자동 계산값을 회색 글씨로 안내
+    const sync = () => {
+      const cat = $('#f_cat').value, cur = { ...obj, title: $('#f_title').value, time: $('#f_time').value, status: $('#f_status').value, hours: $('#f_hours').value, pay: '' };
+      dlg.querySelectorAll('[data-only]').forEach(l => { l.hidden = l.dataset.only !== cat; });
+      const ic = incomeOf(cur);
+      $('#f_hours').placeholder = `자동: ${hrs(autoHours(cur))}시간`;
+      $('#f_pay').placeholder = ic.autoAmount == null ? `「${ic.g}」 시급 미입력` : `자동: ${ic.autoAmount.toLocaleString('ko-KR')}원`;
+    };
+    ['#f_cat', '#f_title', '#f_time', '#f_hours', '#f_status'].forEach(sel => $(sel).addEventListener('input', sync));
+    $('#f_cat').addEventListener('change', sync); sync();
+  }
   $('#fm').onsubmit = e => {
     e.preventDefault();
     const out = { ...obj };
@@ -602,6 +693,7 @@ document.addEventListener('click', async e => {
     openForm(a.dataset.kind, o);
   }
   if (act === 'wnav') { const d = +a.dataset.d, x = state.anchor; state.anchor = !d ? new Date() : state.sview === 'week' ? addDays(x, 7 * d) : new Date(x.getFullYear(), x.getMonth() + d, 1); renderSchedule(); }
+  if (act === 'rate') { state.focusRate = a.dataset.g; location.hash = 'data'; }
   if (act === 'sview') { state.sview = a.dataset.v; renderSchedule(); }
   if (act === 'mmonth') { const d = +a.dataset.d; const n = d ? new Date(state.mY, state.mM + d, 1) : new Date(); state.mY = n.getFullYear(); state.mM = n.getMonth(); renderMoney(); }
   if (act === 'done') { const ev = Store.get('events', a.dataset.id); if (ev) Store.save('events', { ...ev, done: a.checked }); }

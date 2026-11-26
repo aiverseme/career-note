@@ -96,13 +96,13 @@ textarea{resize:vertical}
 .wc.tc{background:color-mix(in srgb,var(--acc) 6%,transparent)}
 .out{opacity:.4}
 .wsp{padding:3px 4px;z-index:1}
-.bar{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:4px 8px;border-radius:6px;background:#bfeef0;color:#0b4a52;font-size:12.5px;text-align:center;cursor:pointer;font-weight:500}
+.spanbar{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:4px 8px;border-radius:6px;background:#bfeef0;color:#0b4a52;font-size:12.5px;text-align:center;cursor:pointer;font-weight:500}
 .gc{display:block;border-radius:6px;padding:4px 5px;background:var(--bg);color:var(--fg);text-align:center;cursor:pointer;font-size:12.5px;overflow-wrap:anywhere}
 .gc small{display:block;font-size:12px;opacity:.85;font-variant-numeric:tabular-nums}
 .gc.hot{--bg:#fde2df;--fg:#8a1d10}
 .gl{display:block;cursor:pointer;font-size:12.5px;padding:1px 3px;border-radius:4px;overflow-wrap:anywhere}
 .gl b{font-weight:600;font-variant-numeric:tabular-nums}
-.gc:hover,.gl:hover,.bar:hover{outline:2px solid var(--ink);outline-offset:-1px}
+.gc:hover,.gl:hover,.spanbar:hover{outline:2px solid var(--ink);outline-offset:-1px}
 .off{text-decoration:line-through;opacity:.5}
 
 /* ---------- 7. 커리어: 목록, 이력서, 포트폴리오 ---------- */
@@ -153,6 +153,19 @@ td.r,th.r{text-align:right}
 .pay.off{opacity:.5}
 tbody tr{cursor:pointer}
 tbody tr:hover{background:var(--soft)}
+
+/* ---------- 8-1. 강의 수입·시급표 ---------- */
+.income{margin-bottom:18px}
+.income .stats{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.neg{color:var(--danger)}
+.note a{color:var(--acc);font-weight:600}
+details summary{cursor:pointer;color:var(--acc);font-weight:500;min-height:32px}
+tr.off td{text-decoration:line-through;opacity:.5}
+.rates{display:grid;gap:8px}
+.rate{display:grid;grid-template-columns:minmax(0,1fr) 5.5em 9em;gap:8px;align-items:center;padding:6px 0;border-top:1px solid var(--line)}
+.rate:first-child{border-top:0}
+.rate select,.rate input{min-height:40px;padding:6px 8px}
+@media (max-width:600px){.rate{grid-template-columns:minmax(0,1fr) 5em 7.5em}}
 
 /* ---------- 9. 팝업 입력창 ---------- */
 dialog{border:0;border-radius:16px;padding:0;background:var(--panel);color:var(--ink);width:min(620px,calc(100vw - 24px));max-height:calc(100dvh - 24px);box-shadow:0 20px 60px rgb(0 0 0/.3)}
