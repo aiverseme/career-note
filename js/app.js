@@ -622,14 +622,18 @@ function showApp() {
   $('#auth').hidden = true; $('#app').hidden = false; $('#sync').hidden = false; $('#sync').className = 'sync'; $('#sync').textContent = '저장됨';
   route();
 }
-const KO_ERR = m => /invalid login/i.test(m) ? '이메일 또는 비밀번호가 맞지 않아요.'
+const EMAIL_MSG = '이메일 주소 전체를 입력해 주세요 (예: name@gmail.com)';
+const KO_ERR = m => /email address|invalid format|valid email/i.test(m) ? EMAIL_MSG
+  : /invalid login/i.test(m) ? '이메일 또는 비밀번호가 맞지 않아요.'
   : /not confirmed/i.test(m) ? '메일함에서 가입 확인 링크를 먼저 눌러 주세요.'
   : /already registered/i.test(m) ? '이미 가입된 이메일이에요. 로그인해 주세요.'
   : /password/i.test(m) ? '비밀번호는 6자 이상으로 해 주세요.'
   : /rate limit/i.test(m) ? '잠시 뒤에 다시 시도해 주세요.' : '문제가 생겼어요: ' + m;
 async function authDo(kind) {
   const email = $('#authEmail').value.trim(), pw = $('#authPw').value, msg = $('#authMsg');
-  if (!email || pw.length < 6) { msg.className = 'auth-msg'; msg.textContent = '이메일과 6자 이상의 비밀번호를 입력해 주세요.'; return; }
+  msg.className = 'auth-msg';
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { msg.textContent = EMAIL_MSG; $('#authEmail').focus(); return; }
+  if (pw.length < 6) { msg.textContent = '비밀번호는 6자 이상으로 해 주세요.'; $('#authPw').focus(); return; }
   msg.className = 'auth-msg ok'; msg.textContent = kind === 'in' ? '로그인 중…' : '가입 중…';
   try {
     if (kind === 'in') { await Store.signIn(email, pw); showApp(); }
