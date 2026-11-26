@@ -15,7 +15,9 @@
 const Store = (() => {
   const KINDS = ['events', 'careers', 'expenses', 'payments'];
   const LEGACY_KEY = 'career-note-v1';             // 1단계(브라우저 저장) 때 쓰던 이름
-  const sb = supabase.createClient(CONFIG.url, CONFIG.key);
+  // flowType 'pkce': Google 로그인 후 돌아올 때 주소에 ?code=... 를 붙여 안전하게 로그인 처리
+  const sb = supabase.createClient(CONFIG.url, CONFIG.key, { auth: { flowType: 'pkce', detectSessionInUrl: true } });
+  const appUrl = () => location.origin + location.pathname;
   const data = { events: [], careers: [], expenses: [], payments: [], profile: {} };
   let user = null, lastLoad = 0, pending = 0;
   const listeners = [], statusListeners = [], errorListeners = [];
@@ -65,7 +67,11 @@ const Store = (() => {
   return {
     /* ----- 로그인 ----- */
     async init() {
-      const { data: s } = await sb.auth.getSession();
+      const { data: s } = await sb.auth.getSession();   // Google에서 돌아온 경우 여기서 로그인 완료
+      const q = new URLSearchParams(location.search);
+      const oauthError = q.get('error_description');
+      if (q.has('code') || q.has('error')) history.replaceState(null, '', appUrl() + location.hash);  // 주소창 정리
+      if (oauthError) throw new Error(oauthError);
       user = s.session?.user || null;
       sb.auth.onAuthStateChange((_e, session) => { user = session?.user || null; });
       if (user) await load();
@@ -77,8 +83,13 @@ const Store = (() => {
       if (error) throw error;
       user = d.user; await load(); return user;
     },
+    // Google 계정으로 로그인·가입 (처음이면 자동으로 가입돼요)
+    async signInWithGoogle() {
+      const { error } = await sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: appUrl() } });
+      if (error) throw error;               // 성공하면 Google 화면으로 이동합니다
+    },
     async signUp(email, password) {
-      const redirect = /^https?:/.test(location.protocol) ? location.origin + location.pathname : undefined;
+      const redirect = /^https?:/.test(location.protocol) ? appUrl() : undefined;
       const { data: d, error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: redirect } });
       if (error) throw error;
       if (d.session) { user = d.user; await load(); }

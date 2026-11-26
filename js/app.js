@@ -643,6 +643,11 @@ async function authDo(kind) {
 }
 $('#authForm').onsubmit = e => { e.preventDefault(); authDo('in'); };
 $('#btnUp').onclick = () => authDo('up');
+$('#btnGoogle').onclick = async () => {
+  const msg = $('#authMsg'); msg.className = 'auth-msg ok'; msg.textContent = 'Google 로그인 화면으로 이동 중…';
+  try { await Store.signInWithGoogle(); }
+  catch (err) { msg.className = 'auth-msg'; msg.textContent = /not enabled|unsupported provider/i.test(err.message) ? 'Google 로그인이 아직 켜져 있지 않아요. Supabase 설정을 확인해 주세요.' : KO_ERR(err.message || ''); }
+};
 
 /* ---------- 14. 시작: 로그인 확인 → 데이터 불러오기 → 화면 그리기 ---------- */
 Store.onChange(() => { if (!$('#app').hidden) render(); });
@@ -650,5 +655,8 @@ Store.onError(toast);
 Store.onStatus(s => { const el = $('#sync'); el.className = 'sync ' + s; el.textContent = s === 'saving' ? '저장 중…' : '저장됨'; });
 window.addEventListener('hashchange', () => { if (!$('#app').hidden) route(); });
 document.body.classList.add('signed-out');
-Store.init().then(u => u ? showApp() : showAuth()).catch(err => { console.error(err); showAuth(); $('#authMsg').textContent = 'Supabase에 연결하지 못했어요. 인터넷 연결을 확인해 주세요.'; });
+Store.init().then(u => u ? showApp() : showAuth()).catch(err => {
+  console.error(err); showAuth();
+  $('#authMsg').textContent = /fetch|network/i.test(err.message) ? 'Supabase에 연결하지 못했어요. 인터넷 연결을 확인해 주세요.' : '로그인하지 못했어요: ' + err.message;
+});
 }

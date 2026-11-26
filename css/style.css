@@ -196,6 +196,9 @@ dialog h2{font-size:21px;margin-bottom:16px}
 .auth-card{width:min(420px,100%);display:grid;gap:14px;background:var(--panel);border:1px solid var(--line);border-top:4px solid var(--acc);border-radius:var(--radius);padding:clamp(24px,5vw,40px)}
 .auth-card h1{font-size:34px;font-weight:700;letter-spacing:-.02em}
 .auth-card p{margin:0}
+.gbtn{min-height:48px;font-size:16px;font-weight:600;border-color:var(--ink)}
+.or{display:flex;align-items:center;gap:10px;color:var(--mute);font-size:13px}
+.or::before,.or::after{content:"";flex:1;height:1px;background:var(--line)}
 .auth-msg{min-height:1.5em;font-size:14px;color:var(--danger)}
 .auth-msg.ok{color:var(--acc)}
 .sync{font-size:13px;color:var(--mute);white-space:nowrap;padding-bottom:10px}
