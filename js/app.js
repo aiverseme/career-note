@@ -716,6 +716,7 @@ async function authDo(kind) {
 }
 $('#authForm').onsubmit = e => { e.preventDefault(); authDo('in'); };
 $('#btnUp').onclick = () => authDo('up');
+if (!CONFIG.googleLogin) { $('#btnGoogle').hidden = true; $('.or').hidden = true; }
 $('#btnGoogle').onclick = async () => {
   const msg = $('#authMsg'); msg.className = 'auth-msg ok'; msg.textContent = 'Google 로그인 화면으로 이동 중…';
   try { await Store.signInWithGoogle(); }
