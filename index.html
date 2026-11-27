@@ -45,6 +45,17 @@
     </form>
   </section>
 
+  <!-- ③-2 ＋ 빠른 입력 버튼: 어느 화면에서든 바로 기록 -->
+  <button class="fab" id="fab" data-act="fab" aria-label="빠른 입력" aria-expanded="false" aria-controls="fabMenu" hidden>＋</button>
+  <div class="fabmenu" id="fabMenu" role="menu" aria-label="무엇을 입력할까요" hidden>
+    <button role="menuitem" data-act="add" data-kind="events" data-cat="class">수업</button>
+    <button role="menuitem" data-act="add" data-kind="events" data-cat="work">일정 (업무·개인·성빈 등)</button>
+    <button role="menuitem" data-act="add" data-kind="events" data-cat="issue">오늘의 이슈</button>
+    <button role="menuitem" data-act="add" data-kind="incomes">수업 외 수입</button>
+    <button role="menuitem" data-act="add" data-kind="expenses">지출</button>
+    <button role="menuitem" data-act="add" data-kind="careers">커리어</button>
+  </div>
+
   <!-- ④ 화면들: 한 번에 하나만 보입니다. 내용은 app.js가 채웁니다 -->
   <main id="app" hidden>
     <section class="view" id="v-today"></section>

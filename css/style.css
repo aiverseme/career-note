@@ -239,9 +239,69 @@ dialog h2{font-size:21px;margin-bottom:16px}
 
 /* ---------- 11. 인쇄(이력서만 깔끔하게) ---------- */
 @media print{
-  .top,.head .tools,.toolbar,.seg,#toast,.noprint{display:none!important}
+  .fab,.fabmenu,.top,.head .tools,.toolbar,.seg,#toast,.noprint{display:none!important}
   body{background:#fff;color:#000}
   main{padding:0;max-width:none}
   .resume{border:0;padding:0}
 }
 .pwrow{display:flex;gap:8px;align-items:flex-end;margin-top:14px}.pwrow .fl{flex:1;margin:0}
+
+/* ---------- 13. ＋ 빠른 입력 버튼 (컴퓨터·휴대폰 공통) ---------- */
+.fab{position:fixed;right:max(20px,env(safe-area-inset-right));bottom:24px;z-index:8;width:58px;height:58px;border-radius:50%;border:0;background:var(--acc);color:var(--acc-ink);font-size:30px;line-height:1;cursor:pointer;box-shadow:0 6px 20px rgb(0 0 0/.25);transition:transform .15s}
+.fab.on{transform:rotate(45deg)}
+.fabmenu{position:fixed;right:max(20px,env(safe-area-inset-right));bottom:92px;z-index:8;display:grid;min-width:230px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:6px;box-shadow:0 12px 36px rgb(0 0 0/.25)}
+.fabmenu button{min-height:48px;padding:0 14px;border:0;background:none;text-align:left;font-weight:500;border-radius:10px;cursor:pointer}
+.fabmenu button:hover{background:var(--soft)}
+.monly{display:none}
+
+/* ---------- 14. 하루 보기 ---------- */
+.dstrip{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;margin-bottom:14px}
+.ds{display:grid;justify-items:center;gap:1px;padding:7px 0 5px;border:1px solid var(--line);border-radius:12px;background:var(--panel);cursor:pointer;font-size:12px;color:var(--mute)}
+.ds b{font-size:19px;color:var(--ink);font-variant-numeric:tabular-nums}
+.ds i{font-style:normal;height:12px;line-height:10px;color:var(--acc);letter-spacing:1px}
+.ds.red span,.ds.red b{color:var(--danger)}
+.ds.now{border-color:var(--acc)}
+.ds.on{background:var(--ink);border-color:var(--ink)}
+.ds.on span,.ds.on b,.ds.on i{color:var(--bg)}
+.dday{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;margin-bottom:6px}
+.dday h2{font-size:20px}
+.dh{font-size:14px;color:var(--mute);font-weight:600;margin:16px 0 6px}
+.dl{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.dc{display:grid;grid-template-columns:3.4em 5px minmax(0,1fr) auto;align-items:center;gap:10px;padding:12px;background:var(--panel);border:1px solid var(--line);border-radius:12px;cursor:pointer}
+.dc:hover{border-color:var(--ink)}
+.dc.imp{box-shadow:inset 0 0 0 2px var(--danger)}
+.dt{display:grid;font-variant-numeric:tabular-nums;line-height:1.2}
+.dt b{font-size:15px}.dt small{color:var(--mute);font-size:13px}
+.dbar{align-self:stretch;border-radius:3px;background:var(--fg,var(--acc))}
+.dm{display:grid;gap:3px}
+.dn{font-weight:600;overflow-wrap:anywhere}
+.dk{font-size:13px;display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+.dc input[type=checkbox]{width:24px;height:24px;min-height:0;accent-color:var(--acc)}
+
+/* ---------- 15. 휴대폰 전용: 아래 탭바, 전체 화면 입력창 ---------- */
+@media (max-width:600px){
+  .monly{display:inline-block}
+  .nav{position:fixed;left:0;right:0;bottom:0;z-index:7;display:grid;grid-template-columns:repeat(5,1fr);gap:0;background:var(--panel);border-top:1px solid var(--line);padding:4px 4px calc(4px + env(safe-area-inset-bottom));overflow:visible}
+  .nav a{display:grid;place-items:center;min-height:50px;padding:4px 2px;border-radius:10px;font-size:14px}
+  .nav a[aria-current=page]{background:var(--soft);color:var(--acc);font-weight:700}
+  .top{padding-bottom:0}
+  main{padding-bottom:calc(150px + env(safe-area-inset-bottom))}
+  .fab{bottom:calc(74px + env(safe-area-inset-bottom));right:16px}
+  .fabmenu{bottom:calc(142px + env(safe-area-inset-bottom));right:16px;left:16px;min-width:0}
+  #toast{bottom:calc(80px + env(safe-area-inset-bottom))}
+  #dlg{width:100vw;max-width:100vw;height:100dvh;max-height:100dvh;margin:0;border-radius:0}
+  #dlg form{min-height:100%;display:flex;flex-direction:column;padding-bottom:0}
+  #dlg .acts{position:sticky;bottom:0;margin:auto -18px 0;padding:12px 18px calc(12px + env(safe-area-inset-bottom));background:var(--panel);border-top:1px solid var(--line)}
+  #dlg .acts .btn{min-height:50px;flex:1}
+  #dlg .acts .sp{display:none}
+  input,select,textarea{min-height:48px}
+  .head .tools .btn{min-height:40px}
+  .calbar h2{font-size:19px;width:100%}
+  .ytable td:nth-child(3){width:auto}
+  .ytable tr{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px 10px;padding:12px 4px}
+  .ytable td{padding:0;font-size:14px}
+  .ytable td::before{float:none;display:block;width:auto;margin:0;font-size:12px}
+  .ytable td:nth-child(1){grid-column:1/3}.ytable td:nth-child(3){grid-column:1/-1}
+  .ytable td:nth-child(1)::before,.ytable td:nth-child(3)::before{display:none}
+  .ytable td:nth-child(1){font-size:16px}
+}

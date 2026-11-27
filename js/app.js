@@ -114,7 +114,7 @@ const listOr = (items, emptyMsg, showDate) => items.length
 const VIEWS = ['today', 'schedule', 'career', 'money', 'data'];
 const now0 = new Date();
 const state = {
-  view: 'today', sel: today(), anchor: new Date(), sview: 'week',
+  view: 'today', sel: today(), anchor: new Date(), sview: matchMedia('(max-width:600px)').matches ? 'day' : 'week',
   ctab: 'list', cq: '', ckind: '', cyear: '', group: 'project', onlyStar: false,
   mY: now0.getFullYear(), mM: now0.getMonth()
 };
@@ -277,10 +277,50 @@ function weekBlock(start, month, colors) {
   });
   return `<div class="wscroll"><div class="wg">${h}</div></div>`;
 }
+// 휴대폰용 '하루' 보기: 위에 일주일 날짜 줄, 아래에 그날 일정을 시간순 카드로
+function dayCard(i, colors) {
+  const c = catOf(i.cat), off = isOff(i) || (i.done && (i.cat === 'issue' || i.cat === 'pay'));
+  const et = i.endTime || endOf(i.title);
+  const tm = i.time ? `<b>${esc(i.time)}</b>${et ? `<small>${esc(et)}</small>` : ''}` : `<b class="mute">${i.cat === 'pay' ? '결제' : '종일'}</b>`;
+  const col = hasColor(i.color) ? i.color : i.cat === 'class' ? (colors[keyOf(i.title)] ?? 9) : null;
+  const bar = col != null && col !== 'none' ? `style="${colorStyle(col)}"` : `style="--fg:${c.c}"`;
+  const multi = i.end > i.start ? ` <span class="mute">· ${md(i.start)}~${md(i.end)}</span>` : '';
+  let ctl = '';
+  if (i.cat === 'issue' && i.src === 'events') ctl = `<input type="checkbox" data-act="done" data-id="${esc(i.id)}" ${i.done ? 'checked' : ''} aria-label="완료">`;
+  if (i.cat === 'pay') ctl = `<button class="btn sm ${i.done ? 'ghost' : 'pri'}" data-act="pay" data-id="${esc(i.id)}" data-month="${i.month}">${i.done ? '납부 완료' : '납부'}</button>`;
+  return `<li class="dc${off ? ' off' : ''}${i.imp ? ' imp' : ''}" data-open="${i.src}" data-id="${esc(i.id)}">
+    <span class="dt">${tm}</span><span class="dbar" ${bar}></span>
+    <span class="dm"><span class="dn">${i.imp ? '<span class="star">★</span> ' : ''}${esc(cleanTitle(i.title))}${i.cat === 'pay' && i.done ? ' · 납부' : ''}</span>
+    <span class="dk"><span class="tag" style="--c:${c.c}">${c.n}</span>${i.role ? ` <span class="mute">${esc(i.role)}</span>` : ''}${i.status && i.status !== '진행' ? ` <span class="tag" style="--c:var(--danger)">${esc(i.status)}</span>` : ''}${multi}</span></span>${ctl}</li>`;
+}
+function dayBlock(colors) {
+  const sel = state.sel, d = parse(sel), t = today();
+  const ws = addDays(d, -d.getDay());
+  const strip = [...Array(7)].map((_, k) => {
+    const x = addDays(ws, k), xs = ymd(x), n = itemsBetween(xs, xs).filter(i => i.cat !== 'pay').length;
+    return `<button class="ds${xs === sel ? ' on' : ''}${xs === t ? ' now' : ''}${x.getDay() === 0 || HOLIDAYS[xs] ? ' red' : ''}" data-act="dsel" data-d="${xs}" aria-pressed="${xs === sel}">
+      <span>${WD[x.getDay()]}</span><b>${x.getDate()}</b><i>${n ? '•'.repeat(Math.min(n, 3)) : ''}</i></button>`;
+  }).join('');
+  const items = onDay(itemsBetween(sel, sel), sel);
+  const rank = i => i.cat === 'issue' ? 2 : i.cat === 'pay' ? 3 : 1;
+  const main = items.filter(i => rank(i) === 1), issues = items.filter(i => rank(i) === 2), pays = items.filter(i => rank(i) === 3);
+  const exps = Store.list('expenses').filter(x => x.date === sel && !x.payId);
+  const sec = (h, list) => list.length ? `<h3 class="dh">${h}</h3><ul class="dl">${list.map(i => dayCard(i, colors)).join('')}</ul>` : '';
+  const hol = HOLIDAYS[sel];
+  return `<div class="dstrip" role="group" aria-label="날짜 고르기">${strip}</div>
+  <div class="dday"><h2>${d.getMonth() + 1}월 ${d.getDate()}일 ${WD[d.getDay()]}요일${sel === t ? ' <span class="tag">오늘</span>' : ''}</h2>${hol ? `<b class="neg">${esc(hol)}</b>` : ''}</div>
+  ${items.length || exps.length ? '' : `<p class="empty">일정이 없어요. 아래 ＋ 버튼으로 바로 넣을 수 있어요.</p>`}
+  ${sec('일정', main)}${sec('오늘의 이슈', issues)}${sec('결제', pays)}
+  ${exps.length ? `<h3 class="dh">지출</h3><ul class="dl">${exps.map(x => `<li class="dc" data-open="expenses" data-id="${esc(x.id)}"><span class="dt"><b class="mute">지출</b></span><span class="dbar" style="--fg:var(--danger)"></span><span class="dm"><span class="dn">${esc(x.item)}</span><span class="dk"><span class="mute">${esc(x.cat || '')}</span></span></span><b class="num">${won(x.amount)}</b></li>`).join('')}</ul>` : ''}`;
+}
 function renderSchedule() {
   const a = state.anchor, colors = colorMap();
   let title, body;
-  if (state.sview === 'week') {
+  if (state.sview === 'day') {
+    const d = parse(state.sel);
+    title = `${d.getFullYear()}년 ${d.getMonth() + 1}월`;
+    body = dayBlock(colors);
+  } else if (state.sview === 'week') {
     const start = addDays(a, -a.getDay()), end = addDays(start, 6);
     title = `${start.getFullYear()}.${start.getMonth() + 1}.${start.getDate()} – ${end.getMonth() + 1}.${end.getDate()}`;
     body = weekBlock(start, null, colors);
@@ -291,7 +331,7 @@ function renderSchedule() {
     for (let s = addDays(first, -first.getDay()); s <= last; s = addDays(s, 7)) body += weekBlock(s, a.getMonth(), colors);
   }
   $('#v-schedule').innerHTML = `
-  <div class="head"><div><h1>일정</h1><div class="sub">빈칸을 누르면 그 날짜·분류로 바로 입력돼요</div></div>
+  <div class="head"><div><h1>일정</h1><div class="sub">${state.sview === 'day' ? '날짜를 누르거나 옆으로 밀어서 넘겨요' : '빈칸을 누르면 그 날짜·분류로 바로 입력돼요'}</div></div>
     <div class="tools"><button class="btn pri" data-act="add" data-kind="events">+ 일정 추가</button>
     <button class="btn" data-act="add" data-kind="payments">+ 정기 결제</button></div></div>
   <div class="calbar"><h2>${title}</h2>
@@ -299,7 +339,7 @@ function renderSchedule() {
     <button class="btn sm" data-act="wnav" data-d="0">오늘</button>
     <button class="btn sm" data-act="wnav" data-d="1" aria-label="다음">›</button>
     <span style="flex:1"></span>
-    <div class="seg" role="group" aria-label="보기">${[['week', '주간 표'], ['month', '월간 표']].map(([k, n]) => `<button data-act="sview" data-v="${k}" aria-pressed="${state.sview === k}">${n}</button>`).join('')}</div>
+    <div class="seg" role="group" aria-label="보기">${[['day', '하루'], ['week', '주간 표'], ['month', '월간 표']].map(([k, n]) => `<button data-act="sview" data-v="${k}" aria-pressed="${state.sview === k}"${k === 'day' ? ' class="monly"' : ''}>${n}</button>`).join('')}</div>
   </div>
   ${body}`;
 }
@@ -818,6 +858,34 @@ function openForm(kind, obj) {
   };
 }
 
+/* ---------- 10-1. ＋ 빠른 입력 버튼, 휴대폰 밀어서 넘기기, 표 라벨 ---------- */
+function toggleFab(open) {
+  const m = $('#fabMenu'), b = $('#fab'), on = open ?? m.hidden;
+  m.hidden = !on; b.setAttribute('aria-expanded', on); b.classList.toggle('on', on);
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#fabMenu').hidden) toggleFab(false); });
+document.addEventListener('click', e => { if (!$('#fabMenu').hidden && !e.target.closest('#fabMenu,#fab')) toggleFab(false); }, true);
+(() => {                                         // 하루 보기에서 옆으로 밀면 전날·다음날
+  let x0 = null, y0 = 0;
+  const el = $('#v-schedule');
+  el.addEventListener('touchstart', e => { if (state.sview !== 'day') return; x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; }, { passive: true });
+  el.addEventListener('touchend', e => {
+    if (x0 == null) return;
+    const dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0; x0 = null;
+    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    state.sel = ymd(addDays(parse(state.sel), dx < 0 ? 1 : -1)); state.anchor = parse(state.sel); renderSchedule();
+  }, { passive: true });
+})();
+// 휴대폰에서 표를 카드로 바꿀 때 쓰는 칸 이름: 각 칸에 머리글 글자를 붙여 둬요
+new MutationObserver(() => {
+  document.querySelectorAll('table.stack').forEach(t => {
+    if (t.dataset.labeled) return;
+    const hs = [...t.querySelectorAll('thead th')].map(th => th.textContent.trim());
+    t.querySelectorAll('tbody tr').forEach(tr => [...tr.children].forEach((td, i) => { if (!td.dataset.l && hs[i]) td.dataset.l = hs[i]; }));
+    t.dataset.labeled = 1;
+  });
+}).observe(document.body, { childList: true, subtree: true });
+
 /* ---------- 11. 버튼 처리: 화면 어디를 누르든 여기서 한 번에 받습니다 ---------- */
 document.addEventListener('click', async e => {
   if (e.target.closest('[data-stop]')) return;
@@ -832,11 +900,31 @@ document.addEventListener('click', async e => {
     const o = DEFAULTS[a.dataset.kind]();
     if (a.dataset.cat) o.cat = a.dataset.cat;
     if (a.dataset.date) o.date = a.dataset.date;
+    if (a.closest('#fabMenu')) {                 // ＋ 버튼: 일정 '하루' 보기 중이면 그 날짜로
+      toggleFab(false);
+      const d = state.view === 'schedule' && state.sview === 'day' ? state.sel : today();
+      if ('date' in o) o.date = d; if ('start' in o) o.start = d;
+    }
     openForm(a.dataset.kind, o);
   }
-  if (act === 'wnav') { const d = +a.dataset.d, x = state.anchor; state.anchor = !d ? new Date() : state.sview === 'week' ? addDays(x, 7 * d) : new Date(x.getFullYear(), x.getMonth() + d, 1); renderSchedule(); }
+  if (act === 'wnav') {
+    const d = +a.dataset.d, x = state.anchor;
+    if (state.sview === 'day') { state.sel = d ? ymd(addDays(parse(state.sel), d)) : today(); state.anchor = parse(state.sel); }
+    else state.anchor = !d ? new Date() : state.sview === 'week' ? addDays(x, 7 * d) : new Date(x.getFullYear(), x.getMonth() + d, 1);
+    renderSchedule();
+  }
+  if (act === 'dsel') { state.sel = a.dataset.d; state.anchor = parse(state.sel); renderSchedule(); }
+  if (act === 'fab') { toggleFab(); return; }
   if (act === 'rate') { state.focusRate = a.dataset.g; location.hash = 'data'; }
-  if (act === 'sview') { state.sview = a.dataset.v; renderSchedule(); }
+  if (act === 'sview') {
+    const v = a.dataset.v;
+    if (v === 'day') {                         // 보던 주·달에 오늘이 있으면 오늘, 아니면 그 첫날
+      const x = state.anchor, from = state.sview === 'week' ? ymd(addDays(x, -x.getDay())) : ymd(new Date(x.getFullYear(), x.getMonth(), 1));
+      const to = state.sview === 'week' ? ymd(addDays(parse(from), 6)) : ymd(new Date(x.getFullYear(), x.getMonth() + 1, 0));
+      if (state.sview !== 'day') state.sel = today() >= from && today() <= to ? today() : from;
+    } else if (state.sview === 'day') state.anchor = parse(state.sel);
+    state.sview = v; renderSchedule();
+  }
   if (act === 'mview') { state.mview = a.dataset.v; renderMoney(); }
   if (act === 'ynav') { state.mY = +a.dataset.d ? state.mY + +a.dataset.d : new Date().getFullYear(); renderMoney(); }
   if (act === 'gomonth') { state.mY = +a.dataset.y; state.mM = +a.dataset.m; state.mview = 'month'; renderMoney(); window.scrollTo(0, 0); }
@@ -925,12 +1013,12 @@ function loadSample() {
 /* ---------- 13. 로그인 화면 ---------- */
 function showAuth() {
   document.body.classList.add('signed-out');
-  $('#app').hidden = true; $('#auth').hidden = false;
+  $('#app').hidden = true; $('#auth').hidden = false; $('#fab').hidden = true; $('#fabMenu').hidden = true;
   $('#authMsg').textContent = '';
 }
 function showApp() {
   document.body.classList.remove('signed-out');
-  $('#auth').hidden = true; $('#app').hidden = false; $('#sync').hidden = false; $('#sync').className = 'sync'; $('#sync').textContent = '저장됨';
+  $('#auth').hidden = true; $('#app').hidden = false; $('#fab').hidden = false; $('#sync').hidden = false; $('#sync').className = 'sync'; $('#sync').textContent = '저장됨';
   route();
 }
 const EMAIL_MSG = '이메일 주소 전체를 입력해 주세요 (예: name@gmail.com)';
