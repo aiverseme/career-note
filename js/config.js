@@ -11,5 +11,5 @@ const CONFIG = {
   url: 'https://bhnmxpplmtitedakupbn.supabase.co',
   key: 'sb_publishable_ImEcPGMMJH6HzabeMEyAUw_y1SF8rTO',
   // Google 로그인 버튼: Google Cloud와 Supabase에서 Google 로그인을 설정한 뒤 true로 바꾸세요
-  googleLogin: false, allowSignup: false
+  googleLogin: false, allowSignup: true
 };
