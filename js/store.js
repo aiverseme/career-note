@@ -99,6 +99,10 @@ const Store = (() => {
       if (d.session) { user = d.user; await load(); }
       return !!d.session;                    // false면 메일 확인이 필요해요
     },
+    async changePassword(password) {
+      const { error } = await sb.auth.updateUser({ password });
+      if (error) throw error;
+    },
     async signOut() {
       await sb.auth.signOut(); user = null;
       KINDS.forEach(k => { data[k] = []; }); data.profile = {};

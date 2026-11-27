@@ -244,3 +244,4 @@ dialog h2{font-size:21px;margin-bottom:16px}
   main{padding:0;max-width:none}
   .resume{border:0;padding:0}
 }
+.pwrow{display:flex;gap:8px;align-items:flex-end;margin-top:14px}.pwrow .fl{flex:1;margin:0}

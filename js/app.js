@@ -646,6 +646,11 @@ function renderData() {
         <p style="margin:0 0 12px"><b>${esc(Store.user?.email)}</b> 으로 로그인 중</p>
         <p class="note">데이터는 Supabase에 저장돼요. 휴대폰, 학교 컴퓨터 어디서든 같은 계정으로 로그인하면 똑같이 보여요.</p>
         <div class="acts" style="margin-top:0"><button class="btn" data-act="reload">새로 불러오기</button><button class="btn ghost" data-act="logout">로그아웃</button></div>
+        <form id="pwForm" class="pwrow" autocomplete="off">
+          <label class="fl"><span>새 비밀번호 (6자 이상)</span><input type="password" id="newPw" minlength="6" autocomplete="new-password" required></label>
+          <button class="btn">비밀번호 변경</button>
+        </form>
+        <p class="auth-msg" id="pwMsg" role="status"></p>
       </div>
       <div class="card"><h2>저장된 데이터</h2>
         <div class="stats"><div class="stat"><b>${n.careers}</b><span>커리어</span></div><div class="stat"><b>${n.events}</b><span>일정</span></div><div class="stat"><b>${n.expenses + n.payments}</b><span>지출·정기결제</span></div></div>
@@ -949,6 +954,21 @@ async function authDo(kind) {
 }
 $('#authForm').onsubmit = e => { e.preventDefault(); authDo('in'); };
 $('#btnUp').onclick = () => authDo('up');
+// 공개 가입을 끈 경우: 가입 버튼 대신 안내 (계정은 관리자가 만들어 줘요)
+if (CONFIG.allowSignup === false) {
+  $('#btnUp').hidden = true;
+  $('#btnIn').insertAdjacentHTML('afterend', '<p class="mute" style="font-size:14px;margin:4px 0 0;text-align:center">초대받은 계정으로 로그인하세요. 처음 받은 비밀번호는 로그인 후 설정 → 계정에서 바꿀 수 있어요.</p>');
+}
+// 설정 → 계정: 비밀번호 변경
+document.addEventListener('submit', async e => {
+  if (e.target.id !== 'pwForm') return;
+  e.preventDefault();
+  const pw = $('#newPw').value, msg = $('#pwMsg');
+  if (pw.length < 6) { msg.className = 'auth-msg'; msg.textContent = '비밀번호는 6자 이상으로 해 주세요.'; return; }
+  msg.className = 'auth-msg ok'; msg.textContent = '바꾸는 중…';
+  try { await Store.changePassword(pw); $('#newPw').value = ''; msg.textContent = '비밀번호를 바꿨어요. 다음 로그인부터 새 비밀번호를 쓰세요.'; }
+  catch (err) { msg.className = 'auth-msg'; msg.textContent = /different from the old/i.test(err.message) ? '지금 비밀번호와 다른 비밀번호를 입력해 주세요.' : KO_ERR(err.message || ''); }
+});
 if (!CONFIG.googleLogin) { $('#btnGoogle').hidden = true; $('.or').hidden = true; }
 $('#btnGoogle').onclick = async () => {
   const msg = $('#authMsg'); msg.className = 'auth-msg ok'; msg.textContent = 'Google 로그인 화면으로 이동 중…';
