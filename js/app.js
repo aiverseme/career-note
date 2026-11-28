@@ -85,7 +85,7 @@ function itemsBetween(from, to) {
     Store.list('payments').forEach(p => {
       if (p.active === false) return;
       const d = ymd(new Date(m.getFullYear(), m.getMonth(), Math.min(Number(p.day) || 1, last)));
-      if (d < from || d > to) return;
+      if (d < from || d > to || (p.start && d < p.start)) return;
       const month = d.slice(0, 7);
       out.push({ src: 'payments', id: p.id, title: `${p.name} ${won(p.amount)}`, start: d, end: d, time: '', cat: 'pay', color: p.color ?? '', month, done: isPaid(p.id, month) });
     });
@@ -795,6 +795,7 @@ const FORMS = {
   payments: { t: '정기 결제', f: [
     ['name', '이름', 'text', { req: 1, ph: '예: 성빈 수학학원' }],
     ['day', '매월 결제일', 'number', { req: 1, min: 1, max: 31 }],
+    ['start', '시작일 (이 날부터 달력에 표시)', 'date'],
     ['amount', '금액(원)', 'number', { req: 1, min: 0 }],
     ['cat', '분류', 'select', { opts: EXP_CATS }],
     ['method', '결제수단', 'select', { opts: METHODS }],
