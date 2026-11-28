@@ -94,7 +94,8 @@ function itemsBetween(from, to) {
   return out.sort((a, b) => (a.start + (a.time || '99:99') + (a.endTime || '')).localeCompare(b.start + (b.time || '99:99') + (b.endTime || '')));
 }
 const onDay = (items, d) => items.filter(i => i.start <= d && i.end >= d);
-const isPaid = (pid, month) => Store.list('expenses').some(x => x.payId === pid && x.payMonth === month);
+// 납부 여부: 가계부에 연결된 지출이 있거나, 앱 밖(시트 등)에서 이미 낸 달로 표시된 경우(paidMonths)
+const isPaid = (pid, month) => Store.list('expenses').some(x => x.payId === pid && x.payMonth === month) || (Store.get('payments', pid)?.paidMonths || []).includes(month);
 
 function itemRow(i, showDate) {
   const c = catOf(i.cat);
@@ -935,7 +936,13 @@ document.addEventListener('click', async e => {
   if (act === 'pay') {
     const p = Store.get('payments', a.dataset.id), mon = a.dataset.month; if (!p) return;
     const paid = Store.list('expenses').find(x => x.payId === p.id && x.payMonth === mon);
-    if (paid) { if (await ask(`${p.name} ${mon.replace('-', '년 ')}월 납부 기록을 취소할까요?`)) Store.remove('expenses', paid.id); }
+    const outside = (p.paidMonths || []).includes(mon);
+    if (paid || outside) {
+      if (await ask(`${p.name} ${mon.replace('-', '년 ')}월 납부 기록을 취소할까요?`)) {
+        if (paid) Store.remove('expenses', paid.id);
+        if (outside) Store.save('payments', { ...p, paidMonths: p.paidMonths.filter(m => m !== mon) });
+      }
+    }
     else {
       const [y, m] = mon.split('-').map(Number), last = new Date(y, m, 0).getDate();
       Store.save('expenses', { date: `${mon}-${pad(Math.min(Number(p.day) || 1, last))}`, item: p.name, amount: p.amount, cat: p.cat, method: p.method, memo: '정기 결제', payId: p.id, payMonth: mon });
