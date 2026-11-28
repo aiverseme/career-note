@@ -305,3 +305,20 @@ dialog h2{font-size:21px;margin-bottom:16px}
   .ytable td:nth-child(1)::before,.ytable td:nth-child(3)::before{display:none}
   .ytable td:nth-child(1){font-size:16px}
 }
+
+/* ---------- 16. 할 일 ---------- */
+.tdl{list-style:none;margin:0;padding:0}
+.td{display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:10px;align-items:start;padding:9px 2px;border-top:1px solid var(--line)}
+.td:first-child{border-top:0}
+.td input{width:22px;height:22px;min-height:0;margin-top:1px;accent-color:var(--acc);cursor:pointer}
+.tdt{cursor:pointer;overflow-wrap:anywhere}
+.tdt small{display:block;color:var(--mute);font-size:13px}
+.td.done .tdt{text-decoration:line-through;color:var(--mute)}
+.td.imp:not(.done) .tdt{font-weight:600}
+.tg h3{font-size:15px;font-weight:700;margin:18px 0 4px;display:flex;gap:8px;align-items:baseline}
+.tg h3 .n,.tcard h2 .n{color:var(--mute);font-weight:400;font-size:14px}
+.tbar{height:8px;background:var(--soft);border-radius:4px;overflow:hidden;margin:-4px 0 14px}
+.tbar i{display:block;height:100%;background:var(--acc)}
+.tadd{display:flex;gap:8px;margin-bottom:6px}
+.tadd input{flex:1}
+@media (max-width:600px){.nav{grid-template-columns:repeat(6,1fr)}.nav a{font-size:13px}}

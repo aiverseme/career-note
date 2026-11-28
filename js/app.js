@@ -112,7 +112,7 @@ const listOr = (items, emptyMsg, showDate) => items.length
   : `<p class="empty">${emptyMsg}</p>`;
 
 /* ---------- 4. 화면 전환: 주소 끝의 #이름을 보고 해당 화면만 보여 줌 ---------- */
-const VIEWS = ['today', 'schedule', 'career', 'money', 'data'];
+const VIEWS = ['today', 'schedule', 'todo', 'career', 'money', 'data'];
 const now0 = new Date();
 const state = {
   view: 'today', sel: today(), anchor: new Date(), sview: matchMedia('(max-width:600px)').matches ? 'day' : 'week',
@@ -128,7 +128,7 @@ function route() {
   render();
 }
 function render() {
-  ({ today: renderToday, schedule: renderSchedule, career: renderCareer, money: renderMoney, data: renderData })[state.view]();
+  ({ today: renderToday, schedule: renderSchedule, todo: renderTodo, career: renderCareer, money: renderMoney, data: renderData })[state.view]();
 }
 
 /* ---------- 5. 오늘 화면 ---------- */
@@ -176,6 +176,7 @@ function renderToday() {
       </div>
       <div class="card"><h2>${d.getMonth() + 1}월 강의 수입</h2>${(() => { const inc = monthIncome(t.slice(0, 7)); return `<div class="stats" style="grid-template-columns:repeat(2,minmax(0,1fr))"><div class="stat"><b class="num">${inc.total.toLocaleString('ko-KR')}</b><span>원 · ${inc.live.length}회</span></div>${Store.profile().tax33 ? `<div class="stat"><b class="num">${net33(inc.total).toLocaleString('ko-KR')}</b><span>3.3% 공제 후</span></div>` : ''}</div>${inc.noRate ? `<p class="mute" style="font-size:14px;margin:10px 0 0">금액 미입력 ${inc.noRate}회 · <a href="#data">강사료표 입력</a></p>` : ''}<p style="margin:12px 0 0"><a href="#money" class="btn sm" style="display:inline-flex;align-items:center;text-decoration:none">수입·지출 보기</a></p>`; })()}</div>
       <div class="card"><h2>결제 예정 <span class="n">10일 이내</span></h2>${listOr(pays, '다가오는 정기 결제가 없어요.', true)}</div>
+      ${todoSummary()}
     </div>
   </div>`;
 }
@@ -344,6 +345,69 @@ function renderSchedule() {
   </div>
   ${body}`;
 }
+
+/* ---------- 6-1. 할 일: 날짜 없이 쌓아 두고 체크하는 목록 ---------- */
+// 할 일 하나 = { title, list(목록 이름), group(묶음), when(시기, 자유 글), important, done, doneAt, order, memo }
+const TODO_DEFAULT = '할 일';
+const todoAll = () => Store.list('todos');
+const todoSort = (a, b) => (a.done - b.done) || (b.important - a.important) || ((a.order ?? 1e9) - (b.order ?? 1e9)) || String(a.created || '').localeCompare(String(b.created || ''));
+function todoRow(t) {
+  return `<li class="td${t.done ? ' done' : ''}${t.important ? ' imp' : ''}">
+    <input type="checkbox" data-act="tdone" data-id="${esc(t.id)}" ${t.done ? 'checked' : ''} aria-label="완료">
+    <span class="tdt" data-open="todos" data-id="${esc(t.id)}">${t.important ? '<span class="star">★</span> ' : ''}${esc(t.title)}${t.memo ? `<small>${esc(t.memo)}</small>` : ''}</span>
+    ${t.when ? `<span class="tag" style="--c:#6b5bd6">${esc(t.when)}</span>` : '<span></span>'}</li>`;
+}
+const progress = (list) => { const n = list.filter(t => t.done).length; return { n, all: list.length, pct: list.length ? Math.round(n / list.length * 100) : 0 }; };
+function todoSummary() {
+  const open = todoAll().filter(t => !t.done).sort(todoSort);
+  if (!todoAll().length) return '';
+  const imp = open.filter(t => t.important), show = (imp.length ? imp : open).slice(0, 6);
+  const pg = progress(todoAll());
+  return `<div class="card"><h2>할 일 <span class="n">${pg.n} / ${pg.all} 완료</span></h2>
+    ${show.length ? `<ul class="tdl">${show.map(todoRow).join('')}</ul>` : '<p class="empty">모두 끝냈어요!</p>'}
+    <p style="margin:12px 0 0"><a href="#todo" class="btn sm" style="display:inline-flex;align-items:center;text-decoration:none">할 일 전체 보기 (${open.length})</a></p></div>`;
+}
+function renderTodo() {
+  const all = todoAll(), mode = state.tmode || 'group';
+  const lists = uniq([TODO_DEFAULT, ...all.map(t => t.list || TODO_DEFAULT)]);
+  const notes = Store.profile().todoNotes || {};
+  const body = lists.map(name => {
+    const items = all.filter(t => (t.list || TODO_DEFAULT) === name);
+    if (!items.length && name !== TODO_DEFAULT) return '';
+    const pg = progress(items);
+    const key = mode === 'when' ? (t => t.when || '시기 미정') : (t => t.group || '');
+    const order = [...new Set(items.slice().sort((a, b) => (a.order ?? 1e9) - (b.order ?? 1e9)).map(key))];
+    if (mode === 'when') order.sort((a, b) => (a === '시기 미정') - (b === '시기 미정') || whenRank(a) - whenRank(b));
+    const groups = order.map(g => {
+      const its = items.filter(t => key(t) === g).sort(todoSort), gp = progress(its);
+      return `<div class="tg">${g ? `<h3>${esc(g)} <span class="n">${gp.n}/${gp.all}</span></h3>` : ''}<ul class="tdl">${its.map(todoRow).join('')}</ul></div>`;
+    }).join('');
+    return `<div class="card tcard">
+      <h2>${esc(name)} <span class="n">${pg.n} / ${pg.all} 완료</span></h2>
+      <div class="tbar" role="progressbar" aria-valuenow="${pg.pct}" aria-valuemin="0" aria-valuemax="100"><i style="width:${pg.pct}%"></i></div>
+      <form class="tadd" data-list="${esc(name)}"><input name="t" placeholder="할 일을 쓰고 Enter" aria-label="${esc(name)}에 할 일 추가" autocomplete="off"><button class="btn">추가</button></form>
+      ${groups || '<p class="empty">아직 할 일이 없어요.</p>'}
+      ${notes[name] ? `<div class="note" style="margin:16px 0 0;white-space:pre-line">${esc(notes[name])}</div>` : ''}
+    </div>`;
+  }).join('');
+  $('#v-todo').innerHTML = `
+  <div class="head"><div><h1>할 일</h1><div class="sub">날짜 없이 쌓아 두고, 끝나면 체크해요</div></div>
+    <div class="tools"><div class="seg" role="group" aria-label="묶어 보기">${[['group', '묶음별'], ['when', '시기별']].map(([k, n]) => `<button data-act="tmode" data-v="${k}" aria-pressed="${mode === k}">${n}</button>`).join('')}</div></div></div>
+  <div class="stackv">${body}</div>`;
+}
+// '2026년 11월 말', '2027년 3월 이후', '2027년 연중' 같은 시기를 순서대로
+function whenRank(w) {
+  const m = String(w).match(/(\d{4})년\s*(\d{1,2})?/); if (!m) return 9e9;
+  return +m[1] * 100 + (m[2] ? +m[2] : 13) + (/말/.test(w) ? .5 : 0) + (/이후/.test(w) ? .7 : 0);
+}
+document.addEventListener('submit', e => {
+  const f = e.target.closest('.tadd'); if (!f) return;
+  e.preventDefault();
+  const v = f.t.value.trim(); if (!v) return;
+  const list = f.dataset.list === TODO_DEFAULT ? '' : f.dataset.list;
+  Store.save('todos', { title: v, list, group: '', when: '', important: false, done: false, order: Date.now() });
+  setTimeout(() => { const i = document.querySelector(`.tadd[data-list="${CSS.escape(f.dataset.list)}"] input`); if (i) i.focus(); }, 50);
+});
 
 /* ---------- 7. 커리어 화면: 기록 목록 / 이력서 / 포트폴리오 ---------- */
 function renderCareer() {
@@ -793,6 +857,14 @@ const FORMS = {
     ['cat', '구분', 'select', { opts: ['강의료(실입금)', '사업비', '상금', '교안·원고료', '기타 수입'] }],
     ['tax', '공제', 'select', { opts: [['0', '공제 없음'], ['3.3', '3.3% (사업소득)'], ['8.8', '8.8% (기타소득)']] }],
     ['memo', '메모', 'text']] },
+  todos: { t: '할 일', f: [
+    ['title', '할 일', 'text', { req: 1 }],
+    ['group', '묶음', 'text', { ph: '예: 1. 개인 브랜딩 강화' }],
+    ['when', '시기 (자유롭게)', 'text', { ph: '예: 2027년 1월' }],
+    ['list', '목록', 'text', { ph: '비우면 기본 "할 일" 목록' }],
+    ['important', '★ 중요', 'check'],
+    ['done', '완료', 'check'],
+    ['memo', '메모', 'textarea']] },
   payments: { t: '정기 결제', f: [
     ['name', '이름', 'text', { req: 1, ph: '예: 성빈 수학학원' }],
     ['day', '매월 결제일', 'number', { req: 1, min: 1, max: 31 }],
@@ -809,6 +881,7 @@ const DEFAULTS = {
   careers: () => ({ kind: 'lecture', start: today() }),
   expenses: () => ({ date: today(), cat: '식비', method: '카드' }),
   incomes: () => ({ date: today(), cat: '기타 수입', tax: '0' }),
+  todos: () => ({ done: false, important: false, order: Date.now() }),
   payments: () => ({ active: true, cat: '교육비(학원비)', method: '자동이체', day: 25 })
 };
 function field(k, label, type, o = {}, v) {
@@ -852,9 +925,14 @@ function openForm(kind, obj) {
     if (out.end && out.end < (out.date || out.start)) out.end = '';
     if (out.color !== '' && out.color !== 'none' && out.color != null) out.color = Number(out.color);
     if (out.link && !safeUrl(out.link)) { toast('링크는 https://로 시작해야 해요'); return; }
+    if (kind === 'todos') out.doneAt = out.done ? (obj.doneAt || today()) : '';
     Store.save(kind, out); dlg.close(); toast('저장했어요');
   };
   $('#fclose').onclick = () => dlg.close();
+  if (kind === 'todos' && !isNew) {             // 날짜가 생기면 일정으로 옮겨 적기 (할 일은 그대로 남음)
+    $('#fdel').insertAdjacentHTML('afterend', '<button type="button" class="btn ghost" id="fsend">일정으로 보내기</button>');
+    $('#fsend').onclick = () => { dlg.close(); openForm('events', { ...DEFAULTS.events(), cat: 'work', title: $('#f_title')?.value || obj.title, memo: obj.memo || '' }); };
+  }
   if (!isNew) $('#fdel').onclick = async () => {
     if (await ask('이 항목을 삭제할까요? 되돌릴 수 없어요.')) { Store.remove(kind, obj.id); dlg.close(); toast('삭제했어요'); }
   };
@@ -917,6 +995,8 @@ document.addEventListener('click', async e => {
   }
   if (act === 'dsel') { state.sel = a.dataset.d; state.anchor = parse(state.sel); renderSchedule(); }
   if (act === 'fab') { toggleFab(); return; }
+  if (act === 'tdone') { const t = Store.get('todos', a.dataset.id); if (t) Store.save('todos', { ...t, done: a.checked, doneAt: a.checked ? today() : '' }); }
+  if (act === 'tmode') { state.tmode = a.dataset.v; renderTodo(); }
   if (act === 'rate') { state.focusRate = a.dataset.g; location.hash = 'data'; }
   if (act === 'sview') {
     const v = a.dataset.v;

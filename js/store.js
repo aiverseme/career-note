@@ -13,7 +13,7 @@
    - profiles : 이력서 머리글(이름·직함·소개)
    ============================================================ */
 const Store = (() => {
-  const KINDS = ['events', 'careers', 'expenses', 'payments', 'incomes'];
+  const KINDS = ['events', 'careers', 'expenses', 'payments', 'incomes', 'todos'];
   const LEGACY_KEY = 'career-note-v1';             // 1단계(브라우저 저장) 때 쓰던 이름
   // flowType 'pkce': Google 로그인 후 돌아올 때 주소에 ?code=... 를 붙여 안전하게 로그인 처리
   const sb = supabase.createClient(CONFIG.url, CONFIG.key, { auth: { flowType: 'pkce', detectSessionInUrl: true } });
